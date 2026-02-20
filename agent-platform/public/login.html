@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent 管理平台登录</title>
+    <style>
+      :root { --bg:#0f172a; --card:#111827; --line:#334155; --text:#e5e7eb; --muted:#94a3b8; --accent:#3b82f6; }
+      *{box-sizing:border-box}
+      body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 20% 10%,#1e293b,#0b1220 60%);font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:var(--text)}
+      .card{width:min(460px,92vw);background:linear-gradient(180deg,#111827,#0b1220);border:1px solid #1f2937;border-radius:16px;padding:28px;box-shadow:0 12px 50px rgba(2,6,23,.55)}
+      .title{font-size:28px;font-weight:700;margin:0 0 8px}
+      .sub{margin:0 0 18px;color:var(--muted)}
+      .field{display:grid;gap:8px;margin-bottom:12px}
+      .field label{font-size:13px;color:var(--muted)}
+      .field input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#0b1220;color:var(--text)}
+      button{width:100%;padding:12px;border:0;border-radius:10px;background:linear-gradient(90deg,#2563eb,#06b6d4);color:#fff;font-weight:700;cursor:pointer}
+      .tips{font-size:12px;color:var(--muted);margin-top:10px}
+    </style>
+  </head>
+  <body>
+    <form class="card" method="post" action="/login">
+      <h1 class="title">Agent 管理平台</h1>
+      <p class="sub">参考 vben 风格的控制台登录入口</p>
+      <div class="field">
+        <label>用户名</label>
+        <input name="username" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label>密码</label>
+        <input name="password" type="password" autocomplete="current-password" required />
+      </div>
+      <button type="submit">登录并进入控制台</button>
+      <div class="tips">登录后可审阅 Agent 日记、产出与成本。</div>
+    </form>
+  </body>
+</html>

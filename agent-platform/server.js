@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const multer = require('multer');
 
 const app = express();
@@ -12,74 +13,122 @@ const dbPath = path.join(dataDir, 'db.json');
 const backupDir = path.join(dataDir, 'backups');
 const uploadDir = path.join(__dirname, 'public', 'uploads');
 
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-if (!fs.existsSync(backupDir)) {
-  fs.mkdirSync(backupDir, { recursive: true });
+for (const dir of [dataDir, backupDir, uploadDir]) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 if (!fs.existsSync(dbPath)) {
   fs.writeFileSync(dbPath, JSON.stringify({ entries: [] }, null, 2));
 }
 
 function loadDb() {
-  const raw = fs.readFileSync(dbPath, 'utf-8');
-  return JSON.parse(raw);
+  return JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
 }
-
 function saveDb(db) {
   fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
 }
 
 const DASHBOARD_USER = process.env.DASHBOARD_USER || 'admin';
-const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || 'change-me-8001';
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || crypto.randomBytes(18).toString('base64url');
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(24).toString('hex');
 
-app.use((req, res, next) => {
-  const auth = req.headers.authorization || '';
-  if (!auth.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="Agent Platform"');
-    return res.status(401).send('Authentication required');
+if (!process.env.DASHBOARD_PASSWORD) {
+  console.log('[agent-platform] DASHBOARD_PASSWORD not set, generated one-time password:');
+  console.log(DASHBOARD_PASSWORD);
+}
+
+function parseCookies(req) {
+  const cookieHeader = req.headers.cookie || '';
+  const out = {};
+  cookieHeader.split(';').forEach((part) => {
+    const i = part.indexOf('=');
+    if (i > 0) {
+      out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    }
+  });
+  return out;
+}
+
+function sign(text) {
+  return crypto.createHmac('sha256', SESSION_SECRET).update(text).digest('hex');
+}
+
+function issueSession(user) {
+  const exp = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  const payload = `${user}|${exp}`;
+  const sig = sign(payload);
+  return Buffer.from(`${payload}|${sig}`).toString('base64url');
+}
+
+function verifySession(token) {
+  try {
+    const raw = Buffer.from(token, 'base64url').toString('utf8');
+    const [user, expStr, sig] = raw.split('|');
+    if (!user || !expStr || !sig) return false;
+    const payload = `${user}|${expStr}`;
+    if (sign(payload) !== sig) return false;
+    if (Date.now() > Number(expStr)) return false;
+    return user === DASHBOARD_USER;
+  } catch {
+    return false;
   }
-
-  const decoded = Buffer.from(auth.slice(6), 'base64').toString('utf8');
-  const idx = decoded.indexOf(':');
-  const user = idx >= 0 ? decoded.slice(0, idx) : decoded;
-  const pass = idx >= 0 ? decoded.slice(idx + 1) : '';
-
-  if (user !== DASHBOARD_USER || pass !== DASHBOARD_PASSWORD) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="Agent Platform"');
-    return res.status(401).send('Invalid credentials');
-  }
-  next();
-});
+}
 
 app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false }));
+
+app.get('/login', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.post('/login', (req, res) => {
+  const { username, password } = req.body || {};
+  if (username !== DASHBOARD_USER || password !== DASHBOARD_PASSWORD) {
+    return res.status(401).send('用户名或密码错误');
+  }
+  const token = issueSession(username);
+  res.setHeader('Set-Cookie', `ap_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`);
+  return res.redirect('/');
+});
+
+app.post('/logout', (_req, res) => {
+  res.setHeader('Set-Cookie', 'ap_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+  res.json({ ok: true });
+});
+
+app.use((req, res, next) => {
+  if (req.path === '/login' || req.path === '/favicon.ico') return next();
+
+  const cookies = parseCookies(req);
+  const ok = cookies.ap_session && verifySession(cookies.ap_session);
+  if (!ok) {
+    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
+    return res.redirect('/login');
+  }
+  return next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
-    const safeExt = path.extname(file.originalname || '').slice(0, 10) || '.jpg';
-    cb(null, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}${safeExt}`);
+    const ext = path.extname(file.originalname || '').slice(0, 10) || '.jpg';
+    cb(null, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}${ext}`);
   },
 });
 const upload = multer({ storage });
 
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.post('/api/upload', upload.single('image'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'image is required' });
-  }
-  res.json({
-    ok: true,
-    imageUrl: `/uploads/${req.file.filename}`,
-  });
+  if (!req.file) return res.status(400).json({ error: 'image is required' });
+  return res.json({ ok: true, imageUrl: `/uploads/${req.file.filename}` });
 });
 
 app.get('/api/entries', (req, res) => {
-  const type = req.query.type;
+  const type = String(req.query.type || '').trim();
   const keyword = String(req.query.q || '').trim().toLowerCase();
   const date = String(req.query.date || '').trim();
   const db = loadDb();
@@ -88,16 +137,15 @@ app.get('/api/entries', (req, res) => {
 
   if (keyword) {
     rows = rows.filter((e) =>
-      `${e.title} ${e.content} ${(e.tags || []).join(' ')}`.toLowerCase().includes(keyword)
+      `${e.title} ${e.content} ${e.reviewNote || ''} ${(e.tags || []).join(' ')}`.toLowerCase().includes(keyword)
     );
   }
-
   if (date) {
     rows = rows.filter((e) => (e.createdAt || '').slice(0, 10) === date);
   }
 
   rows.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  res.json({ entries: rows });
+  return res.json({ entries: rows });
 });
 
 app.post('/api/entries', (req, res) => {
@@ -118,9 +166,7 @@ app.post('/api/entries', (req, res) => {
   if (!['diary', 'output', 'cost'].includes(type)) {
     return res.status(400).json({ error: 'Invalid type' });
   }
-  if (!title) {
-    return res.status(400).json({ error: 'title is required' });
-  }
+  if (!title) return res.status(400).json({ error: 'title is required' });
 
   const diaryContent = [
     goal ? `目标: ${goal}` : '',
@@ -130,9 +176,7 @@ app.post('/api/entries', (req, res) => {
   ].filter(Boolean).join('\n');
 
   const finalContent = String(content || '').trim() || diaryContent;
-  if (!finalContent) {
-    return res.status(400).json({ error: 'content is required' });
-  }
+  if (!finalContent) return res.status(400).json({ error: 'content is required' });
 
   const db = loadDb();
   const entry = {
@@ -144,23 +188,46 @@ app.post('/api/entries', (req, res) => {
     action: action ? String(action).trim() : '',
     result: result ? String(result).trim() : '',
     nextStep: nextStep ? String(nextStep).trim() : '',
+    reviewStatus: 'pending',
+    reviewNote: '',
     imageUrl: imageUrl ? String(imageUrl).trim() : '',
     costMoney: Number(costMoney || 0),
     costTimeMinutes: Number(costTimeMinutes || 0),
     tags: Array.isArray(tags) ? tags : [],
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
   db.entries.push(entry);
   saveDb(db);
-  res.json({ ok: true, entry });
+  return res.json({ ok: true, entry });
 });
 
-app.get('/api/summary', (req, res) => {
+app.patch('/api/entries/:id/review', (req, res) => {
+  const { id } = req.params;
+  const { reviewStatus, reviewNote } = req.body || {};
+  if (!['pending', 'approved', 'rejected'].includes(reviewStatus)) {
+    return res.status(400).json({ error: 'Invalid reviewStatus' });
+  }
+
+  const db = loadDb();
+  const idx = db.entries.findIndex((e) => e.id === id);
+  if (idx < 0) return res.status(404).json({ error: 'Entry not found' });
+
+  db.entries[idx].reviewStatus = reviewStatus;
+  db.entries[idx].reviewNote = String(reviewNote || '').trim();
+  db.entries[idx].updatedAt = new Date().toISOString();
+  saveDb(db);
+  return res.json({ ok: true, entry: db.entries[idx] });
+});
+
+app.get('/api/summary', (_req, res) => {
   const db = loadDb();
   const diaryCount = db.entries.filter((e) => e.type === 'diary').length;
   const outputCount = db.entries.filter((e) => e.type === 'output').length;
   const costRows = db.entries.filter((e) => e.type === 'cost');
+  const approvedCount = db.entries.filter((e) => e.reviewStatus === 'approved').length;
+  const rejectedCount = db.entries.filter((e) => e.reviewStatus === 'rejected').length;
 
   const totalMoney = costRows.reduce((sum, e) => sum + (Number(e.costMoney) || 0), 0);
   const totalTime = costRows.reduce((sum, e) => sum + (Number(e.costTimeMinutes) || 0), 0);
@@ -168,6 +235,8 @@ app.get('/api/summary', (req, res) => {
   res.json({
     diaryCount,
     outputCount,
+    approvedCount,
+    rejectedCount,
     totalMoney,
     totalTimeMinutes: totalTime,
   });
@@ -175,18 +244,14 @@ app.get('/api/summary', (req, res) => {
 
 function runBackup() {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const target = path.join(backupDir, `db-${stamp}.json`);
-  fs.copyFileSync(dbPath, target);
+  fs.copyFileSync(dbPath, path.join(backupDir, `db-${stamp}.json`));
 
-  const files = fs
-    .readdirSync(backupDir)
-    .filter((f) => f.endsWith('.json'))
-    .sort();
-
+  const files = fs.readdirSync(backupDir).filter((f) => f.endsWith('.json')).sort();
   const keep = 30;
   if (files.length > keep) {
-    const remove = files.slice(0, files.length - keep);
-    remove.forEach((f) => fs.unlinkSync(path.join(backupDir, f)));
+    files.slice(0, files.length - keep).forEach((f) => {
+      fs.unlinkSync(path.join(backupDir, f));
+    });
   }
 }
 

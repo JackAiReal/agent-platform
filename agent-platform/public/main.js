@@ -3,11 +3,22 @@ const menus = document.querySelectorAll('.menu');
 const modal = document.getElementById('detail-modal');
 const modalBody = document.getElementById('modal-body');
 
+const statusText = {
+  pending: '待审核',
+  approved: '已通过',
+  rejected: '需修改',
+};
+
 document.getElementById('modal-close').addEventListener('click', () => {
   modal.classList.add('hidden');
 });
 modal.addEventListener('click', (e) => {
   if (e.target === modal) modal.classList.add('hidden');
+});
+
+document.getElementById('btn-logout').addEventListener('click', async () => {
+  await fetch('/logout', { method: 'POST' });
+  location.href = '/login';
 });
 
 menus.forEach((btn) => {
@@ -25,25 +36,57 @@ async function request(url, options = {}) {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
+  if (res.status === 401) {
+    location.href = '/login';
+    throw new Error('Unauthorized');
+  }
   if (!res.ok) throw new Error(await res.text());
   return res.json();
+}
+
+let cachedLists = { diary: [], output: [], cost: [] };
+
+async function updateReview(id, reviewStatus, reviewNote) {
+  await request(`/api/entries/${id}/review`, {
+    method: 'PATCH',
+    body: JSON.stringify({ reviewStatus, reviewNote }),
+  });
+  await Promise.all([loadSummary(), loadList('diary'), loadList('output'), loadList('cost')]);
 }
 
 function openDetail(item) {
   const costInfo = item.type === 'cost'
     ? `<div class="meta">费用: ${item.costMoney || 0} 元 | 时间: ${item.costTimeMinutes || 0} 分钟</div>`
     : '';
+
   modalBody.innerHTML = `
     <h2>${item.title}</h2>
+    <div class="badge ${item.reviewStatus || 'pending'}">${statusText[item.reviewStatus || 'pending']}</div>
     <div class="meta">${new Date(item.createdAt).toLocaleString()}</div>
     ${costInfo}
-    ${item.type === 'diary' ? `
-      <div class="meta">目标: ${item.goal || '-'} | 下一步: ${item.nextStep || '-'}</div>
-    ` : ''}
+    ${item.type === 'diary' ? `<div class="meta">目标: ${item.goal || '-'} | 下一步: ${item.nextStep || '-'}</div>` : ''}
     <p style="white-space: pre-wrap; line-height:1.6;">${item.content}</p>
     ${item.imageUrl ? `<img src="${item.imageUrl}" alt="entry image" style="max-width:100%;border-radius:8px;"/>` : ''}
+    <hr style="margin:12px 0;border:0;border-top:1px solid #e5e7eb;" />
+    <div style="display:grid;gap:8px;">
+      <strong>审核操作</strong>
+      <select id="review-status">
+        <option value="pending" ${item.reviewStatus === 'pending' ? 'selected' : ''}>待审核</option>
+        <option value="approved" ${item.reviewStatus === 'approved' ? 'selected' : ''}>通过</option>
+        <option value="rejected" ${item.reviewStatus === 'rejected' ? 'selected' : ''}>打回</option>
+      </select>
+      <textarea id="review-note" placeholder="审核批注" style="min-height:80px;padding:10px;border-radius:8px;border:1px solid #d1d5db;">${item.reviewNote || ''}</textarea>
+      <button id="review-save" style="padding:10px;border:0;border-radius:8px;background:#111827;color:#fff;cursor:pointer;">保存审核结果</button>
+    </div>
   `;
+
   modal.classList.remove('hidden');
+  document.getElementById('review-save').onclick = async () => {
+    const reviewStatus = document.getElementById('review-status').value;
+    const reviewNote = document.getElementById('review-note').value;
+    await updateReview(item.id, reviewStatus, reviewNote);
+    modal.classList.add('hidden');
+  };
 }
 
 function renderEntry(item) {
@@ -53,6 +96,7 @@ function renderEntry(item) {
     ? `<div class="meta">费用: ${item.costMoney || 0} 元 | 时间: ${item.costTimeMinutes || 0} 分钟</div>`
     : '';
   div.innerHTML = `
+    <div class="badge ${item.reviewStatus || 'pending'}">${statusText[item.reviewStatus || 'pending']}</div>
     <h3>${item.title}</h3>
     <div class="meta">${new Date(item.createdAt).toLocaleString()}</div>
     ${costInfo}
@@ -71,12 +115,6 @@ function getFilters(type) {
     date: (dateEl?.value || '').trim(),
   };
 }
-
-let cachedLists = {
-  diary: [],
-  output: [],
-  cost: [],
-};
 
 async function loadList(type) {
   const box = document.getElementById(`list-${type}`);
@@ -102,6 +140,8 @@ async function loadSummary() {
   wrap.innerHTML = `
     <div class="card"><strong>日记条数</strong><div>${s.diaryCount}</div></div>
     <div class="card"><strong>产出条数</strong><div>${s.outputCount}</div></div>
+    <div class="card"><strong>已通过</strong><div>${s.approvedCount}</div></div>
+    <div class="card"><strong>需修改</strong><div>${s.rejectedCount}</div></div>
     <div class="card"><strong>费用总计</strong><div>${s.totalMoney.toFixed(2)} 元</div></div>
     <div class="card"><strong>时间总计</strong><div>${s.totalTimeMinutes} 分钟</div></div>
   `;
@@ -110,10 +150,11 @@ async function loadSummary() {
 async function uploadImage(file) {
   const fd = new FormData();
   fd.append('image', file);
-  const res = await fetch('/api/upload', {
-    method: 'POST',
-    body: fd,
-  });
+  const res = await fetch('/api/upload', { method: 'POST', body: fd });
+  if (res.status === 401) {
+    location.href = '/login';
+    throw new Error('Unauthorized');
+  }
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
   return data.imageUrl;
@@ -126,9 +167,7 @@ function bindForm(type) {
     const fd = new FormData(form);
     let imageUrl = (fd.get('imageUrl') || '').toString().trim();
     const file = fd.get('imageFile');
-    if (file && file.size > 0) {
-      imageUrl = await uploadImage(file);
-    }
+    if (file && file.size > 0) imageUrl = await uploadImage(file);
 
     const payload = {
       type,
@@ -143,10 +182,7 @@ function bindForm(type) {
       costTimeMinutes: Number(fd.get('costTimeMinutes') || 0),
     };
 
-    await request('/api/entries', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    await request('/api/entries', { method: 'POST', body: JSON.stringify(payload) });
     form.reset();
     await Promise.all([loadList(type), loadSummary()]);
   });
@@ -168,9 +204,7 @@ function exportDiaryPdf(mode) {
   const rows = cachedLists.diary || [];
   const list = rows.filter((e) => {
     const d = new Date(e.createdAt);
-    if (mode === 'day') {
-      return d.toDateString() === now.toDateString();
-    }
+    if (mode === 'day') return d.toDateString() === now.toDateString();
     const diff = (now - d) / (1000 * 60 * 60 * 24);
     return diff <= 7;
   });
@@ -185,7 +219,7 @@ function exportDiaryPdf(mode) {
     doc.text('暂无记录', 14, y);
   } else {
     list.forEach((item, idx) => {
-      const text = `${idx + 1}. ${item.title} | ${new Date(item.createdAt).toLocaleString()}\n${item.content}`;
+      const text = `${idx + 1}. ${item.title} [${statusText[item.reviewStatus || 'pending']}]\n${item.content}`;
       const lines = doc.splitTextToSize(text, 180);
       if (y + lines.length * 5 > 280) {
         doc.addPage();
@@ -209,9 +243,4 @@ bindFilter('diary');
 bindFilter('output');
 bindFilter('cost');
 
-Promise.all([
-  loadSummary(),
-  loadList('diary'),
-  loadList('output'),
-  loadList('cost'),
-]);
+Promise.all([loadSummary(), loadList('diary'), loadList('output'), loadList('cost')]);
