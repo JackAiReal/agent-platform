@@ -37,7 +37,11 @@
           </div>
           <form id="form-diary" class="entry-form">
             <input name="title" placeholder="标题" required />
-            <textarea name="content" placeholder="今天做了什么（图文并茂）" required></textarea>
+            <input name="goal" placeholder="目标（必填建议）" />
+            <textarea name="action" placeholder="动作：今天做了什么"></textarea>
+            <textarea name="result" placeholder="结果：得到什么产出"></textarea>
+            <textarea name="nextStep" placeholder="下一步：明天继续做什么"></textarea>
+            <textarea name="content" placeholder="补充内容（可选，不填将自动由上面四项生成）"></textarea>
             <input name="imageUrl" placeholder="图片URL（可选）" />
             <input name="imageFile" type="file" accept="image/*" />
             <button type="submit">新增日记</button>

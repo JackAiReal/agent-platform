@@ -37,6 +37,9 @@ function openDetail(item) {
     <h2>${item.title}</h2>
     <div class="meta">${new Date(item.createdAt).toLocaleString()}</div>
     ${costInfo}
+    ${item.type === 'diary' ? `
+      <div class="meta">目标: ${item.goal || '-'} | 下一步: ${item.nextStep || '-'}</div>
+    ` : ''}
     <p style="white-space: pre-wrap; line-height:1.6;">${item.content}</p>
     ${item.imageUrl ? `<img src="${item.imageUrl}" alt="entry image" style="max-width:100%;border-radius:8px;"/>` : ''}
   `;
@@ -131,6 +134,10 @@ function bindForm(type) {
       type,
       title: fd.get('title'),
       content: fd.get('content'),
+      goal: fd.get('goal') || '',
+      action: fd.get('action') || '',
+      result: fd.get('result') || '',
+      nextStep: fd.get('nextStep') || '',
       imageUrl,
       costMoney: Number(fd.get('costMoney') || 0),
       costTimeMinutes: Number(fd.get('costTimeMinutes') || 0),
