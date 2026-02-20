@@ -15,6 +15,7 @@
           <button class="menu" data-tab="diary">Agent日记</button>
           <button class="menu" data-tab="output">产出列表</button>
           <button class="menu" data-tab="cost">成本消耗</button>
+          <a class="menu menu-link" href="/api/export.json">导出数据(JSON)</a>
         </nav>
       </aside>
 
@@ -28,6 +29,16 @@
             <button id="btn-logout" class="danger">退出登录</button>
           </div>
           <div class="stats" id="summary"></div>
+          <div class="home-grid">
+            <div class="card">
+              <h3>近14天趋势</h3>
+              <canvas id="timeline-chart" height="120"></canvas>
+            </div>
+            <div class="card">
+              <h3>待审核队列</h3>
+              <div id="pending-list" class="pending-list"></div>
+            </div>
+          </div>
         </section>
 
         <section id="diary" class="tab">
@@ -35,6 +46,12 @@
           <div class="toolbar">
             <input id="q-diary" placeholder="搜索关键词" />
             <input id="date-diary" type="date" />
+            <select id="status-diary">
+              <option value="">全部状态</option>
+              <option value="pending">待审核</option>
+              <option value="approved">已通过</option>
+              <option value="rejected">需修改</option>
+            </select>
             <button id="btn-diary-filter">筛选</button>
             <button id="btn-diary-reset">重置</button>
             <button id="btn-export-day">导出日报PDF</button>
@@ -48,6 +65,7 @@
             <textarea name="nextStep" placeholder="下一步：明天继续做什么"></textarea>
             <textarea name="content" placeholder="补充内容（可选，不填将自动由上面四项生成）"></textarea>
             <input name="imageUrl" placeholder="图片URL（可选）" />
+            <input name="tags" placeholder="标签（逗号分隔）" />
             <input name="imageFile" type="file" accept="image/*" />
             <button type="submit">新增日记</button>
           </form>
@@ -59,6 +77,12 @@
           <div class="toolbar">
             <input id="q-output" placeholder="搜索关键词" />
             <input id="date-output" type="date" />
+            <select id="status-output">
+              <option value="">全部状态</option>
+              <option value="pending">待审核</option>
+              <option value="approved">已通过</option>
+              <option value="rejected">需修改</option>
+            </select>
             <button id="btn-output-filter">筛选</button>
             <button id="btn-output-reset">重置</button>
           </div>
@@ -66,6 +90,7 @@
             <input name="title" placeholder="产出标题（如：新增粉丝、发布文章）" required />
             <textarea name="content" placeholder="产出详情与价值" required></textarea>
             <input name="imageUrl" placeholder="图片URL（可选）" />
+            <input name="tags" placeholder="标签（逗号分隔）" />
             <input name="imageFile" type="file" accept="image/*" />
             <button type="submit">新增产出</button>
           </form>
@@ -77,6 +102,12 @@
           <div class="toolbar">
             <input id="q-cost" placeholder="搜索关键词" />
             <input id="date-cost" type="date" />
+            <select id="status-cost">
+              <option value="">全部状态</option>
+              <option value="pending">待审核</option>
+              <option value="approved">已通过</option>
+              <option value="rejected">需修改</option>
+            </select>
             <button id="btn-cost-filter">筛选</button>
             <button id="btn-cost-reset">重置</button>
           </div>
@@ -88,6 +119,7 @@
               <input name="costTimeMinutes" type="number" step="1" placeholder="时间成本（分钟）" />
             </div>
             <input name="imageUrl" placeholder="图片URL（可选）" />
+            <input name="tags" placeholder="标签（逗号分隔）" />
             <input name="imageFile" type="file" accept="image/*" />
             <button type="submit">新增成本记录</button>
           </form>

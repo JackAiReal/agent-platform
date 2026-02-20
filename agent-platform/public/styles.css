@@ -2,7 +2,7 @@
 body {
   margin: 0;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: #f5f7fb;
+  background: radial-gradient(circle at top, #eef4ff, #f7f9fc 35%, #eef2f7 100%);
   color: #1f2937;
 }
 .layout {
@@ -35,7 +35,26 @@ body {
   background: #374151;
   color: #fff;
 }
+.menu-link { text-decoration: none; display: block; }
 .content { padding: 24px; }
+.home-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+.pending-list {
+  max-height: 240px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+}
+.pending-item {
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 13px;
+}
 .tab { display: none; }
 .tab.active { display: block; }
 h1 { margin: 0 0 10px; font-size: 32px; }
@@ -89,6 +108,7 @@ h2 { margin: 0 0 12px; }
 }
 .entry-form input,
 .entry-form textarea,
+.entry-form select,
 .entry-form button {
   width: 100%;
   padding: 10px;
@@ -110,7 +130,7 @@ h2 { margin: 0 0 12px; }
 }
 .toolbar {
   display: grid;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  grid-template-columns: repeat(7, minmax(110px, 1fr));
   gap: 8px;
   margin-bottom: 10px;
 }
@@ -178,4 +198,5 @@ h2 { margin: 0 0 12px; }
   .layout { grid-template-columns: 1fr; }
   .sidebar { position: sticky; top: 0; z-index: 20; }
   .toolbar { grid-template-columns: 1fr 1fr; }
+  .home-grid { grid-template-columns: 1fr; }
 }

@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -131,6 +132,7 @@ app.get('/api/entries', (req, res) => {
   const type = String(req.query.type || '').trim();
   const keyword = String(req.query.q || '').trim().toLowerCase();
   const date = String(req.query.date || '').trim();
+  const reviewStatus = String(req.query.reviewStatus || '').trim();
   const db = loadDb();
 
   let rows = type ? db.entries.filter((e) => e.type === type) : db.entries;
@@ -142,6 +144,9 @@ app.get('/api/entries', (req, res) => {
   }
   if (date) {
     rows = rows.filter((e) => (e.createdAt || '').slice(0, 10) === date);
+  }
+  if (reviewStatus) {
+    rows = rows.filter((e) => (e.reviewStatus || 'pending') === reviewStatus);
   }
 
   rows.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -228,6 +233,7 @@ app.get('/api/summary', (_req, res) => {
   const costRows = db.entries.filter((e) => e.type === 'cost');
   const approvedCount = db.entries.filter((e) => e.reviewStatus === 'approved').length;
   const rejectedCount = db.entries.filter((e) => e.reviewStatus === 'rejected').length;
+  const pendingCount = db.entries.filter((e) => (e.reviewStatus || 'pending') === 'pending').length;
 
   const totalMoney = costRows.reduce((sum, e) => sum + (Number(e.costMoney) || 0), 0);
   const totalTime = costRows.reduce((sum, e) => sum + (Number(e.costTimeMinutes) || 0), 0);
@@ -237,9 +243,37 @@ app.get('/api/summary', (_req, res) => {
     outputCount,
     approvedCount,
     rejectedCount,
+    pendingCount,
     totalMoney,
     totalTimeMinutes: totalTime,
   });
+});
+
+app.get('/api/timeline', (_req, res) => {
+  const db = loadDb();
+  const days = 14;
+  const out = [];
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const rows = db.entries.filter((e) => (e.createdAt || '').slice(0, 10) === key);
+    out.push({
+      date: key,
+      diary: rows.filter((e) => e.type === 'diary').length,
+      output: rows.filter((e) => e.type === 'output').length,
+      cost: rows.filter((e) => e.type === 'cost').length,
+      money: rows.filter((e) => e.type === 'cost').reduce((s, e) => s + (Number(e.costMoney) || 0), 0),
+    });
+  }
+  res.json({ timeline: out });
+});
+
+app.get('/api/export.json', (_req, res) => {
+  const db = loadDb();
+  res.setHeader('Content-Disposition', `attachment; filename="agent-platform-export-${Date.now()}.json"`);
+  res.json(db);
 });
 
 function runBackup() {
