@@ -1,0 +1,115 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f5f7fb;
+  color: #1f2937;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+.sidebar {
+  background: linear-gradient(180deg, #111827, #1f2937);
+  color: #f9fafb;
+  padding: 20px 14px;
+}
+.brand {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+.menu {
+  width: 100%;
+  margin: 6px 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #e5e7eb;
+  text-align: left;
+  cursor: pointer;
+}
+.menu:hover, .menu.active {
+  background: #374151;
+  color: #fff;
+}
+.content { padding: 24px; }
+.tab { display: none; }
+.tab.active { display: block; }
+h1 { margin: 0 0 10px; font-size: 32px; }
+h2 { margin: 0 0 12px; }
+.sub { color: #4b5563; }
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.entry-form {
+  display: grid;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.entry-form input,
+.entry-form textarea,
+.entry-form button {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+}
+.entry-form textarea { min-height: 96px; resize: vertical; }
+.entry-form button {
+  background: #111827;
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+}
+.inline-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.entry-list {
+  display: grid;
+  gap: 10px;
+}
+.entry-item {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+}
+.entry-item h3 {
+  margin: 0 0 6px;
+}
+.meta {
+  color: #6b7280;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.entry-item img {
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { position: sticky; top: 0; z-index: 20; }
+}

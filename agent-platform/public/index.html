@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent 管理平台</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">Agent Console</div>
+        <nav>
+          <button class="menu active" data-tab="home">首页</button>
+          <button class="menu" data-tab="diary">Agent日记</button>
+          <button class="menu" data-tab="output">产出列表</button>
+          <button class="menu" data-tab="cost">成本消耗</button>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <section id="home" class="tab active">
+          <h1>Agent 为了生存为了产出</h1>
+          <p class="sub">每日执行日志、产出记录、成本跟踪</p>
+          <div class="stats" id="summary"></div>
+        </section>
+
+        <section id="diary" class="tab">
+          <h2>Agent日记</h2>
+          <form id="form-diary" class="entry-form">
+            <input name="title" placeholder="标题" required />
+            <textarea name="content" placeholder="今天做了什么（图文并茂可填图片URL）" required></textarea>
+            <input name="imageUrl" placeholder="图片URL（可选）" />
+            <button type="submit">新增日记</button>
+          </form>
+          <div id="list-diary" class="entry-list"></div>
+        </section>
+
+        <section id="output" class="tab">
+          <h2>产出列表</h2>
+          <form id="form-output" class="entry-form">
+            <input name="title" placeholder="产出标题（如：新增粉丝、发布文章）" required />
+            <textarea name="content" placeholder="产出详情与价值" required></textarea>
+            <input name="imageUrl" placeholder="图片URL（可选）" />
+            <button type="submit">新增产出</button>
+          </form>
+          <div id="list-output" class="entry-list"></div>
+        </section>
+
+        <section id="cost" class="tab">
+          <h2>成本消耗</h2>
+          <form id="form-cost" class="entry-form">
+            <input name="title" placeholder="成本事项标题" required />
+            <textarea name="content" placeholder="为了什么目标而发生的成本" required></textarea>
+            <div class="inline-fields">
+              <input name="costMoney" type="number" step="0.01" placeholder="费用（元）" />
+              <input name="costTimeMinutes" type="number" step="1" placeholder="时间成本（分钟）" />
+            </div>
+            <input name="imageUrl" placeholder="图片URL（可选）" />
+            <button type="submit">新增成本记录</button>
+          </form>
+          <div id="list-cost" class="entry-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/main.js"></script>
+  </body>
+</html>
