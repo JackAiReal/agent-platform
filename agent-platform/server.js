@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
 
 const app = express();
 const PORT = Number(process.env.PORT || 8001);
@@ -8,9 +9,13 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 const dataDir = path.join(__dirname, 'data');
 const dbPath = path.join(dataDir, 'db.json');
+const uploadDir = path.join(__dirname, 'public', 'uploads');
 
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
+}
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
 }
 if (!fs.existsSync(dbPath)) {
   fs.writeFileSync(dbPath, JSON.stringify({ entries: [] }, null, 2));
@@ -28,10 +33,43 @@ function saveDb(db) {
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadDir),
+  filename: (_req, file, cb) => {
+    const safeExt = path.extname(file.originalname || '').slice(0, 10) || '.jpg';
+    cb(null, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}${safeExt}`);
+  },
+});
+const upload = multer({ storage });
+
+app.post('/api/upload', upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'image is required' });
+  }
+  res.json({
+    ok: true,
+    imageUrl: `/uploads/${req.file.filename}`,
+  });
+});
+
 app.get('/api/entries', (req, res) => {
   const type = req.query.type;
+  const keyword = String(req.query.q || '').trim().toLowerCase();
+  const date = String(req.query.date || '').trim();
   const db = loadDb();
-  const rows = type ? db.entries.filter((e) => e.type === type) : db.entries;
+
+  let rows = type ? db.entries.filter((e) => e.type === type) : db.entries;
+
+  if (keyword) {
+    rows = rows.filter((e) =>
+      `${e.title} ${e.content} ${(e.tags || []).join(' ')}`.toLowerCase().includes(keyword)
+    );
+  }
+
+  if (date) {
+    rows = rows.filter((e) => (e.createdAt || '').slice(0, 10) === date);
+  }
+
   rows.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   res.json({ entries: rows });
 });

@@ -27,10 +27,19 @@
 
         <section id="diary" class="tab">
           <h2>Agent日记</h2>
+          <div class="toolbar">
+            <input id="q-diary" placeholder="搜索关键词" />
+            <input id="date-diary" type="date" />
+            <button id="btn-diary-filter">筛选</button>
+            <button id="btn-diary-reset">重置</button>
+            <button id="btn-export-day">导出日报PDF</button>
+            <button id="btn-export-week">导出周报PDF</button>
+          </div>
           <form id="form-diary" class="entry-form">
             <input name="title" placeholder="标题" required />
-            <textarea name="content" placeholder="今天做了什么（图文并茂可填图片URL）" required></textarea>
+            <textarea name="content" placeholder="今天做了什么（图文并茂）" required></textarea>
             <input name="imageUrl" placeholder="图片URL（可选）" />
+            <input name="imageFile" type="file" accept="image/*" />
             <button type="submit">新增日记</button>
           </form>
           <div id="list-diary" class="entry-list"></div>
@@ -38,10 +47,17 @@
 
         <section id="output" class="tab">
           <h2>产出列表</h2>
+          <div class="toolbar">
+            <input id="q-output" placeholder="搜索关键词" />
+            <input id="date-output" type="date" />
+            <button id="btn-output-filter">筛选</button>
+            <button id="btn-output-reset">重置</button>
+          </div>
           <form id="form-output" class="entry-form">
             <input name="title" placeholder="产出标题（如：新增粉丝、发布文章）" required />
             <textarea name="content" placeholder="产出详情与价值" required></textarea>
             <input name="imageUrl" placeholder="图片URL（可选）" />
+            <input name="imageFile" type="file" accept="image/*" />
             <button type="submit">新增产出</button>
           </form>
           <div id="list-output" class="entry-list"></div>
@@ -49,6 +65,12 @@
 
         <section id="cost" class="tab">
           <h2>成本消耗</h2>
+          <div class="toolbar">
+            <input id="q-cost" placeholder="搜索关键词" />
+            <input id="date-cost" type="date" />
+            <button id="btn-cost-filter">筛选</button>
+            <button id="btn-cost-reset">重置</button>
+          </div>
           <form id="form-cost" class="entry-form">
             <input name="title" placeholder="成本事项标题" required />
             <textarea name="content" placeholder="为了什么目标而发生的成本" required></textarea>
@@ -57,6 +79,7 @@
               <input name="costTimeMinutes" type="number" step="1" placeholder="时间成本（分钟）" />
             </div>
             <input name="imageUrl" placeholder="图片URL（可选）" />
+            <input name="imageFile" type="file" accept="image/*" />
             <button type="submit">新增成本记录</button>
           </form>
           <div id="list-cost" class="entry-list"></div>
@@ -64,6 +87,14 @@
       </main>
     </div>
 
+    <div id="detail-modal" class="modal hidden">
+      <div class="modal-panel">
+        <button id="modal-close" class="modal-close">关闭</button>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="/main.js"></script>
   </body>
 </html>
