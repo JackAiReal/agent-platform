@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent Platform - Overview</title>
+    <style>
+      :root { --bg:#0b1220; --card:#111827; --line:#334155; --text:#e5e7eb; --muted:#94a3b8; --brand:#22c55e; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif; color: var(--text); background: radial-gradient(circle at 10% 0%, #1e293b, #0b1220 45%); }
+      .wrap { width: min(1080px, 92vw); margin: 0 auto; padding: 40px 0 70px; }
+      .hero { border: 1px solid var(--line); background: linear-gradient(180deg, #111827, #0f172a); border-radius: 16px; padding: 28px; }
+      .tag { display: inline-block; background: #052e16; color: #86efac; border: 1px solid #14532d; border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+      h1 { margin: 12px 0 10px; font-size: 36px; }
+      p { color: var(--muted); line-height: 1.6; }
+      .btns { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+      .btn { text-decoration: none; color: #fff; background: #2563eb; border: 1px solid #1d4ed8; border-radius: 10px; padding: 10px 14px; }
+      .btn.alt { background: transparent; border-color: var(--line); }
+      .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+      .card { border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 14px; }
+      .section { margin-top: 24px; }
+      .shot { border: 1px solid var(--line); border-radius: 12px; background: #020617; min-height: 180px; display: grid; place-items: center; color: #64748b; }
+      pre { margin: 0; border: 1px solid var(--line); background: #020617; padding: 14px; border-radius: 12px; overflow: auto; }
+      @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="hero">
+        <span class="tag">GitHub-style project page</span>
+        <h1>Agent Management Platform</h1>
+        <p>Track diary/output/cost, review records, run schedule jobs, and push new entries to Telegram/X webhook pipelines.</p>
+        <div class="btns">
+          <a class="btn" href="/login">Open Console</a>
+          <a class="btn alt" href="https://github.com/openclaw/openclaw" target="_blank" rel="noreferrer">OpenClaw</a>
+        </div>
+      </section>
+
+      <section class="section grid">
+        <div class="card"><h3>Features</h3><p>Diary, output, cost modules with review status and trend charts.</p></div>
+        <div class="card"><h3>Schedules</h3><p>Built-in schedule list backed by OpenClaw cron jobs.</p></div>
+        <div class="card"><h3>Webhooks</h3><p>Auto push for newly created entries to Telegram and custom X relay endpoint.</p></div>
+      </section>
+
+      <section class="section">
+        <h2>Screenshots</h2>
+        <div class="shot">Add screenshots under <code>public/uploads/</code> and link them here</div>
+      </section>
+
+      <section class="section">
+        <h2>Quick Start</h2>
+        <pre><code>cd agent-platform
+cp .env.example .env
+npm install
+npm start
+# Open http://127.0.0.1:8001</code></pre>
+      </section>
+    </div>
+  </body>
+</html>

@@ -9,13 +9,15 @@
   <body>
     <div class="layout">
       <aside class="sidebar">
-        <div class="brand">Agent Console</div>
+        <div class="brand" data-i18n="brand">Agent Console</div>
+        <button id="btn-lang" class="menu lang-switch" type="button">EN</button>
         <nav>
-          <button class="menu active" data-tab="home">首页</button>
-          <button class="menu" data-tab="diary">Agent日记</button>
-          <button class="menu" data-tab="output">产出列表</button>
-          <button class="menu" data-tab="cost">成本消耗</button>
-          <a class="menu menu-link" href="/api/export.json">导出数据(JSON)</a>
+          <button class="menu active" data-tab="home" data-i18n="menu_home">首页</button>
+          <button class="menu" data-tab="diary" data-i18n="menu_diary">Agent日记</button>
+          <button class="menu" data-tab="output" data-i18n="menu_output">产出列表</button>
+          <button class="menu" data-tab="cost" data-i18n="menu_cost">成本消耗</button>
+          <button class="menu" data-tab="schedule" data-i18n="menu_schedule">定时列表</button>
+          <a class="menu menu-link" href="/api/export.json" data-i18n="menu_export">导出数据(JSON)</a>
         </nav>
       </aside>
 
@@ -23,10 +25,10 @@
         <section id="home" class="tab active">
           <div class="home-head">
             <div>
-              <h1>Agent 为了生存为了产出</h1>
-              <p class="sub">每日执行日志、产出记录、成本跟踪</p>
+              <h1 data-i18n="home_title">Agent 为了生存为了产出</h1>
+              <p class="sub" data-i18n="home_sub">每日执行日志、产出记录、成本跟踪</p>
             </div>
-            <button id="btn-logout" class="danger">退出登录</button>
+            <button id="btn-logout" class="danger" data-i18n="logout">退出登录</button>
           </div>
           <div class="stats" id="summary"></div>
           <div class="home-grid">
@@ -124,6 +126,15 @@
             <button type="submit">新增成本记录</button>
           </form>
           <div id="list-cost" class="entry-list"></div>
+        </section>
+
+        <section id="schedule" class="tab">
+          <h2 data-i18n="schedule_title">定时列表</h2>
+          <div class="schedule-toolbar">
+            <button id="btn-schedule-refresh" data-i18n="schedule_refresh">刷新列表</button>
+            <button id="btn-schedule-bootstrap" data-i18n="schedule_bootstrap">创建默认任务（12:00 + 23:00）</button>
+          </div>
+          <div id="list-schedule" class="entry-list"></div>
         </section>
       </main>
     </div>

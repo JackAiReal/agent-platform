@@ -87,7 +87,10 @@ append_md "## GitHub 备份结果"
 append_md ""
 
 # 3) Backup all git repositories under workspace
-mapfile -t REPOS < <(find "$WORKSPACE" -name .git -type d -prune | sed 's#/.git$##' | sort)
+REPOS=()
+while IFS= read -r repo_path; do
+  [[ -n "$repo_path" ]] && REPOS+=("$repo_path")
+done < <(find "$WORKSPACE" -name .git -type d -prune | sed 's#/.git$##' | sort)
 
 if [[ ${#REPOS[@]} -eq 0 ]]; then
   append_md "- 未发现 Git 仓库。"

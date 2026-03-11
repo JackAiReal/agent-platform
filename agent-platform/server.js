@@ -4,10 +4,13 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 
 const app = express();
 const PORT = Number(process.env.PORT || 8001);
 const HOST = process.env.HOST || '0.0.0.0';
+const execFileAsync = promisify(execFile);
 
 const dataDir = path.join(__dirname, 'data');
 const dbPath = path.join(dataDir, 'db.json');
@@ -26,6 +29,105 @@ function loadDb() {
 }
 function saveDb(db) {
   fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
+}
+
+const DEFAULT_SCHEDULE_JOBS = [
+  {
+    name: '三篇日记复盘-中午12点',
+    cron: '0 12 * * *',
+    message:
+      '这是定时日记任务提醒（中午12点）。请按固定格式完成三篇日记：1) 今天为了目标做了哪些；2) 平台改造完成了什么；3) 下一步最关键动作。要求每篇包含：事实进展、问题阻塞、下一步。最后给出当日优先级排序。',
+  },
+  {
+    name: '三篇日记复盘-晚上23点',
+    cron: '0 23 * * *',
+    message:
+      '这是定时日记任务提醒（晚上23点）。请按固定格式完成三篇日记：1) 今天为了目标做了哪些；2) 平台改造完成了什么；3) 明日第一优先事项。要求每篇包含：事实进展、问题阻塞、下一步。最后输出明日行动清单（最多3条）。',
+  },
+];
+
+async function runOpenClawCron(args) {
+  const { stdout, stderr } = await execFileAsync('openclaw', ['cron', ...args], {
+    cwd: __dirname,
+    timeout: 30000,
+    maxBuffer: 1024 * 1024,
+  });
+  if (stderr && stderr.trim()) {
+    throw new Error(stderr.trim());
+  }
+  return String(stdout || '').trim();
+}
+
+function tryParseJson(text) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeScheduleJob(job) {
+  return {
+    id: job.id,
+    name: job.name || '-',
+    agentId: job.agentId || '-',
+    enabled: Boolean(job.enabled),
+    schedule: job.schedule || {},
+    sessionTarget: job.sessionTarget || '-',
+    nextRunAtMs: job.state?.nextRunAtMs || null,
+    message: job.payload?.message || job.payload?.text || '',
+  };
+}
+
+function buildEntryPushText(entry) {
+  const title = `[${entry.type}] ${entry.title}`;
+  const body = (entry.content || '').slice(0, 500);
+  return `${title}\n${body}\n#agent-platform`;
+}
+
+async function pushTelegram(entry) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: buildEntryPushText(entry),
+      disable_web_page_preview: true,
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+}
+
+async function pushWebhook(url, entry, source) {
+  if (!url) return;
+  await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      source,
+      event: 'entry.created',
+      at: new Date().toISOString(),
+      entry,
+      text: buildEntryPushText(entry),
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+}
+
+async function notifyEntryCreated(entry) {
+  const tasks = [pushTelegram(entry)];
+  if (process.env.ENTRY_WEBHOOK_URL) {
+    tasks.push(pushWebhook(process.env.ENTRY_WEBHOOK_URL, entry, 'entry_webhook'));
+  }
+  if (process.env.X_WEBHOOK_URL) {
+    tasks.push(pushWebhook(process.env.X_WEBHOOK_URL, entry, 'x_webhook'));
+  }
+  await Promise.allSettled(tasks);
 }
 
 const DASHBOARD_USER = process.env.DASHBOARD_USER || 'admin';
@@ -97,7 +199,7 @@ app.post('/logout', (_req, res) => {
 });
 
 app.use((req, res, next) => {
-  if (req.path === '/login' || req.path === '/favicon.ico') return next();
+  if (req.path === '/login' || req.path === '/favicon.ico' || req.path === '/project') return next();
 
   const cookies = parseCookies(req);
   const ok = cookies.ap_session && verifySession(cookies.ap_session);
@@ -118,6 +220,10 @@ const storage = multer.diskStorage({
   },
 });
 const upload = multer({ storage });
+
+app.get('/project', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'landing.html'));
+});
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -153,7 +259,7 @@ app.get('/api/entries', (req, res) => {
   return res.json({ entries: rows });
 });
 
-app.post('/api/entries', (req, res) => {
+app.post('/api/entries', async (req, res) => {
   const {
     type,
     title,
@@ -205,6 +311,7 @@ app.post('/api/entries', (req, res) => {
 
   db.entries.push(entry);
   saveDb(db);
+  await notifyEntryCreated(entry);
   return res.json({ ok: true, entry });
 });
 
@@ -268,6 +375,91 @@ app.get('/api/timeline', (_req, res) => {
     });
   }
   res.json({ timeline: out });
+});
+
+app.get('/api/schedules', async (_req, res) => {
+  try {
+    const out = await runOpenClawCron(['list', '--all', '--json']);
+    const parsed = tryParseJson(out);
+    const jobs = Array.isArray(parsed?.jobs) ? parsed.jobs.map(normalizeScheduleJob) : [];
+    return res.json({ jobs });
+  } catch (error) {
+    return res.status(500).json({ error: String(error.message || error) });
+  }
+});
+
+app.post('/api/schedules/bootstrap', async (_req, res) => {
+  try {
+    const out = await runOpenClawCron(['list', '--all', '--json']);
+    const parsed = tryParseJson(out);
+    const existing = Array.isArray(parsed?.jobs) ? parsed.jobs : [];
+
+    const created = [];
+    const skipped = [];
+
+    for (const job of DEFAULT_SCHEDULE_JOBS) {
+      const hit = existing.find((x) => x.name === job.name && x.schedule?.expr === job.cron);
+      if (hit) {
+        skipped.push(hit.id);
+        continue;
+      }
+
+      const addOut = await runOpenClawCron([
+        'add',
+        '--json',
+        '--name',
+        job.name,
+        '--agent',
+        'junshi',
+        '--session',
+        'isolated',
+        '--cron',
+        job.cron,
+        '--tz',
+        'Asia/Shanghai',
+        '--message',
+        job.message,
+        '--timeout-seconds',
+        '900',
+        '--announce',
+      ]);
+      const addParsed = tryParseJson(addOut);
+      if (addParsed?.id) created.push(addParsed.id);
+    }
+
+    return res.json({ ok: true, created, skipped });
+  } catch (error) {
+    return res.status(500).json({ error: String(error.message || error) });
+  }
+});
+
+app.post('/api/schedules/:id/run', async (req, res) => {
+  try {
+    await runOpenClawCron(['run', req.params.id]);
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({ error: String(error.message || error) });
+  }
+});
+
+app.patch('/api/schedules/:id', async (req, res) => {
+  const enabled = Boolean(req.body?.enabled);
+  const id = req.params.id;
+  try {
+    await runOpenClawCron([enabled ? 'enable' : 'disable', id]);
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({ error: String(error.message || error) });
+  }
+});
+
+app.delete('/api/schedules/:id', async (req, res) => {
+  try {
+    await runOpenClawCron(['rm', req.params.id, '--json']);
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({ error: String(error.message || error) });
+  }
 });
 
 app.get('/api/export.json', (_req, res) => {

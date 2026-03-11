@@ -3,13 +3,47 @@ const menus = document.querySelectorAll('.menu');
 const modal = document.getElementById('detail-modal');
 const modalBody = document.getElementById('modal-body');
 
-const statusText = {
-  pending: '待审核',
-  approved: '已通过',
-  rejected: '需修改',
+const statusTextMap = {
+  zh: { pending: '待审核', approved: '已通过', rejected: '需修改' },
+  en: { pending: 'Pending', approved: 'Approved', rejected: 'Needs Changes' },
 };
 
+const i18n = {
+  zh: {
+    brand: 'Agent Console',
+    menu_home: '首页',
+    menu_diary: 'Agent日记',
+    menu_output: '产出列表',
+    menu_cost: '成本消耗',
+    menu_schedule: '定时列表',
+    menu_export: '导出数据(JSON)',
+    home_title: 'Agent 为了生存为了产出',
+    home_sub: '每日执行日志、产出记录、成本跟踪',
+    logout: '退出登录',
+    schedule_title: '定时列表',
+    schedule_refresh: '刷新列表',
+    schedule_bootstrap: '创建默认任务（12:00 + 23:00）',
+  },
+  en: {
+    brand: 'Agent Console',
+    menu_home: 'Home',
+    menu_diary: 'Agent Diary',
+    menu_output: 'Outputs',
+    menu_cost: 'Costs',
+    menu_schedule: 'Schedules',
+    menu_export: 'Export Data (JSON)',
+    home_title: 'Agent Work & Delivery Dashboard',
+    home_sub: 'Daily logs, outputs, and cost tracking',
+    logout: 'Log Out',
+    schedule_title: 'Schedules',
+    schedule_refresh: 'Refresh List',
+    schedule_bootstrap: 'Create Default Jobs (12:00 + 23:00)',
+  },
+};
+
+let lang = localStorage.getItem('ap_lang') || 'zh';
 let cachedLists = { diary: [], output: [], cost: [] };
+let cachedSchedules = [];
 
 function setModal(open) {
   if (open) modal.classList.remove('hidden');
@@ -34,6 +68,7 @@ menus.forEach((btn) => {
     tabs.forEach((t) => t.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(target).classList.add('active');
+    if (target === 'schedule') loadSchedules();
   });
 });
 
@@ -50,9 +85,24 @@ async function request(url, options = {}) {
   return res.json();
 }
 
+function applyTranslations() {
+  const dict = i18n[lang] || i18n.zh;
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    const key = el.dataset.i18n;
+    if (dict[key]) el.textContent = dict[key];
+  });
+  const btn = document.getElementById('btn-lang');
+  if (btn) btn.textContent = lang === 'zh' ? 'EN' : '中文';
+}
+
+function statusText(status) {
+  const s = status || 'pending';
+  return statusTextMap[lang]?.[s] || statusTextMap.zh[s] || s;
+}
+
 function badge(status) {
   const s = status || 'pending';
-  return `<span class="badge ${s}">${statusText[s]}</span>`;
+  return `<span class="badge ${s}">${statusText(s)}</span>`;
 }
 
 async function updateReview(id, reviewStatus, reviewNote) {
@@ -157,7 +207,7 @@ function renderPendingQueue() {
     .slice(0, 8);
 
   if (!rows.length) {
-    wrap.innerHTML = '<div class="pending-item">暂无待审核记录</div>';
+    wrap.innerHTML = `<div class="pending-item">${lang === 'en' ? 'No pending reviews' : '暂无待审核记录'}</div>`;
     return;
   }
   wrap.innerHTML = rows
@@ -203,14 +253,23 @@ async function loadTimeline() {
 async function loadSummary() {
   const s = await request('/api/summary');
   const wrap = document.getElementById('summary');
+  const t = lang === 'en'
+    ? {
+      diary: 'Diaries', output: 'Outputs', pending: 'Pending', approved: 'Approved', rejected: 'Needs Changes',
+      money: 'Total Cost', time: 'Total Time', yuan: 'CNY', minute: 'min',
+    }
+    : {
+      diary: '日记条数', output: '产出条数', pending: '待审核', approved: '已通过', rejected: '需修改',
+      money: '费用总计', time: '时间总计', yuan: '元', minute: '分钟',
+    };
   wrap.innerHTML = `
-    <div class="card"><strong>日记条数</strong><div>${s.diaryCount}</div></div>
-    <div class="card"><strong>产出条数</strong><div>${s.outputCount}</div></div>
-    <div class="card"><strong>待审核</strong><div>${s.pendingCount}</div></div>
-    <div class="card"><strong>已通过</strong><div>${s.approvedCount}</div></div>
-    <div class="card"><strong>需修改</strong><div>${s.rejectedCount}</div></div>
-    <div class="card"><strong>费用总计</strong><div>${s.totalMoney.toFixed(2)} 元</div></div>
-    <div class="card"><strong>时间总计</strong><div>${s.totalTimeMinutes} 分钟</div></div>
+    <div class="card"><strong>${t.diary}</strong><div>${s.diaryCount}</div></div>
+    <div class="card"><strong>${t.output}</strong><div>${s.outputCount}</div></div>
+    <div class="card"><strong>${t.pending}</strong><div>${s.pendingCount}</div></div>
+    <div class="card"><strong>${t.approved}</strong><div>${s.approvedCount}</div></div>
+    <div class="card"><strong>${t.rejected}</strong><div>${s.rejectedCount}</div></div>
+    <div class="card"><strong>${t.money}</strong><div>${s.totalMoney.toFixed(2)} ${t.yuan}</div></div>
+    <div class="card"><strong>${t.time}</strong><div>${s.totalTimeMinutes} ${t.minute}</div></div>
   `;
 }
 
@@ -273,6 +332,74 @@ function bindFilter(type) {
   });
 }
 
+function scheduleRow(job) {
+  const div = document.createElement('div');
+  div.className = 'entry-item';
+  const scheduleText = job.schedule?.expr || '-';
+  const tzText = job.schedule?.tz || '-';
+  const nextRun = job.nextRunAtMs ? new Date(job.nextRunAtMs).toLocaleString() : '-';
+  const t = lang === 'en'
+    ? { on: 'Enabled', off: 'Disabled', cron: 'Cron', tz: 'Timezone', next: 'Next Run', id: 'Job ID', msg: 'Message', run: 'Run Now', disable: 'Disable', enable: 'Enable', remove: 'Delete' }
+    : { on: '已启用', off: '已停用', cron: 'Cron', tz: '时区', next: '下次执行', id: '任务ID', msg: '内容', run: '立即运行', disable: '停用', enable: '启用', remove: '删除' };
+
+  div.innerHTML = `
+    <div class="schedule-head">
+      <h3>${job.name}</h3>
+      <span class="badge ${job.enabled ? 'approved' : 'rejected'}">${job.enabled ? t.on : t.off}</span>
+    </div>
+    <div class="meta">Agent: ${job.agentId} | Session: ${job.sessionTarget}</div>
+    <div class="meta">${t.cron}: ${scheduleText} | ${t.tz}: ${tzText}</div>
+    <div class="meta">${t.next}: ${nextRun}</div>
+    <div class="meta">${t.id}: ${job.id}</div>
+    <div class="meta">${t.msg}: ${(job.message || '').slice(0, 120)}${(job.message || '').length > 120 ? '...' : ''}</div>
+    <div class="schedule-actions">
+      <button data-action="run">${t.run}</button>
+      <button data-action="toggle">${job.enabled ? t.disable : t.enable}</button>
+      <button data-action="remove" class="danger-btn">${t.remove}</button>
+    </div>
+  `;
+
+  div.querySelector('[data-action="run"]').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await request(`/api/schedules/${job.id}/run`, { method: 'POST' });
+    alert(lang === 'en' ? 'Triggered.' : '已触发运行');
+    await loadSchedules();
+  });
+
+  div.querySelector('[data-action="toggle"]').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await request(`/api/schedules/${job.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ enabled: !job.enabled }),
+    });
+    await loadSchedules();
+  });
+
+  div.querySelector('[data-action="remove"]').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const ask = lang === 'en' ? `Delete schedule: ${job.name}?` : `确认删除定时任务：${job.name}？`;
+    if (!confirm(ask)) return;
+    await request(`/api/schedules/${job.id}`, { method: 'DELETE' });
+    await loadSchedules();
+  });
+
+  return div;
+}
+
+async function loadSchedules() {
+  const wrap = document.getElementById('list-schedule');
+  if (!wrap) return;
+  wrap.innerHTML = lang === 'en' ? 'Loading...' : '加载中...';
+  const data = await request('/api/schedules');
+  cachedSchedules = data.jobs || [];
+  wrap.innerHTML = '';
+  if (!cachedSchedules.length) {
+    wrap.innerHTML = `<div class="card">${lang === 'en' ? 'No schedules' : '暂无定时任务'}</div>`;
+    return;
+  }
+  cachedSchedules.forEach((job) => wrap.appendChild(scheduleRow(job)));
+}
+
 function exportDiaryPdf(mode) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -294,7 +421,7 @@ function exportDiaryPdf(mode) {
     doc.text('暂无记录', 14, y);
   } else {
     list.forEach((item, idx) => {
-      const text = `${idx + 1}. ${item.title} [${statusText[item.reviewStatus || 'pending']}]\n${item.content}`;
+      const text = `${idx + 1}. ${item.title} [${statusText(item.reviewStatus || 'pending')}]\n${item.content}`;
       const lines = doc.splitTextToSize(text, 180);
       if (y + lines.length * 5 > 280) {
         doc.addPage();
@@ -310,6 +437,23 @@ function exportDiaryPdf(mode) {
 
 document.getElementById('btn-export-day').addEventListener('click', () => exportDiaryPdf('day'));
 document.getElementById('btn-export-week').addEventListener('click', () => exportDiaryPdf('week'));
+document.getElementById('btn-schedule-refresh').addEventListener('click', () => loadSchedules());
+document.getElementById('btn-schedule-bootstrap').addEventListener('click', async () => {
+  const result = await request('/api/schedules/bootstrap', { method: 'POST' });
+  const msg = lang === 'en'
+    ? `Done: created ${result.created.length}, existing ${result.skipped.length}`
+    : `创建完成: 新建 ${result.created.length} 条，已存在 ${result.skipped.length} 条`;
+  alert(msg);
+  await loadSchedules();
+});
+document.getElementById('btn-lang').addEventListener('click', () => {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  localStorage.setItem('ap_lang', lang);
+  applyTranslations();
+  renderPendingQueue();
+  loadSummary();
+  loadSchedules();
+});
 
 async function refreshAll() {
   await Promise.all([
@@ -329,4 +473,5 @@ bindFilter('diary');
 bindFilter('output');
 bindFilter('cost');
 
+applyTranslations();
 refreshAll();
