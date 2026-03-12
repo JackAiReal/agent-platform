@@ -11,7 +11,7 @@ const MEMBERSHIP_CONFIG = {
     apiBase: "https://membership.8188811.xyz/api",
     shareUrl: "https://membership.8188811.xyz/share/VoBJgMG8j7Qiog1jh3uRIhi7aCgkAFfZ",
     appCode: "IdBotAuto",
-    appName: "IdBotAuto",
+    appName: "ID写作业",
     appSecret: "01xL99-xolszV5T_51eEjbkdxOb0PI8VWU0FvhZU6gw",
     rechargeToken: "lf49OcwFe0hEfCCPVQD96fYlOUuBdATs"
 };
@@ -145,7 +145,7 @@ function 格式化时间显示(value) {
     if (!ts) return value || "无";
     let d = new Date(ts);
     function pad(n) { return String(n).padStart(2, '0'); }
-    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+    return d.getFullYear() + "年" + pad(d.getMonth() + 1) + "月" + pad(d.getDate()) + "日 " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
 }
 
 function 规范化匹配值(value) {
@@ -154,16 +154,15 @@ function 规范化匹配值(value) {
 
 function 获取使用教程文本() {
     return [
-        "使用教程（临时文本版）",
+        "使用教程",
         "",
-        "1. 先登录会员账号，确认个人信息页里的会员类型正常显示。",
-        "2. 打开运行设置，选择平台、功能、话术库、本地ID库。",
-        "3. 必须开启无障碍权限、悬浮窗权限。",
-        "4. 点击底部运行按钮开始执行。",
-        "5. 如果提示会员未开通，请点击立即充值，完成支付后关闭充值页并刷新会员信息。",
-        "6. 如果充值成功但会员仍未生效，查看日志里 Membership 相关输出。",
-        "",
-        "后续这里可以替换成正式教程页面。"
+        "1. 请先登录账号，确认个人信息页面中的会员类型与到期时间显示正常。",
+        "2. 进入运行设置页面后，根据实际需求选择平台、功能、话术库与本地ID库。",
+        "3. 使用前请确保无障碍权限与悬浮窗权限均已开启。",
+        "4. 参数确认无误后，点击底部运行按钮开始任务。",
+        "5. 如提示会员未开通或已过期，请点击“立即充值”，完成支付后关闭充值页面并刷新会员信息。",
+        "6. 若会员信息未及时更新，请重新进入个人信息页面查看最新状态。",
+        "7. 如有疑问，请联系售后人员处理。"
     ].join("\n");
 }
 
@@ -219,12 +218,26 @@ function 同步首页状态() {
 }
 
 function 解析会员时间(value) {
-    if (!value) return null;
+    if (!value || value == "无") return null;
     let ts = new Date(value).getTime();
     if (!isNaN(ts)) return ts;
-    if (typeof value == "string") {
-        ts = new Date(value.replace(" ", "T")).getTime();
-        if (!isNaN(ts)) return ts;
+
+    let str = String(value).trim();
+    let match = str.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/);
+    if (match) {
+        let year = parseInt(match[1]);
+        let month = parseInt(match[2]) - 1;
+        let day = parseInt(match[3]);
+        let hour = parseInt(match[4]);
+        let minute = parseInt(match[5]);
+        let second = parseInt(match[6]);
+        let millisecond = parseInt(((match[7] || "") + "000").slice(0, 3) || "0");
+        return new Date(year, month, day, hour, minute, second, millisecond).getTime();
+    }
+
+    match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+        return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]), 0, 0, 0, 0).getTime();
     }
     return null;
 }
@@ -286,7 +299,7 @@ function 同步当前App会员信息(entitlements) {
 
     if (当前权益对象可用(currentEnt)) {
         控件信息.memberAvailable = true;
-        控件信息.memberLevel = currentEnt.plan_name || currentEnt.plan_title || currentEnt.level_name || "会员";
+        控件信息.memberLevel = currentEnt.plan_name || currentEnt.plan_title || currentEnt.level_name || currentEnt.level || "会员";
         记录关键日志("entitlements.available", {
             memberLevel: 控件信息.memberLevel,
             memberStatus: 控件信息.memberStatus,
