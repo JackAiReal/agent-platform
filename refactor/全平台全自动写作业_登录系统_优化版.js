@@ -6,6 +6,7 @@ ui.statusBarColor("#ff0033");
 var 脚本名称 = '全平台全自动写作业';
 const 当前版本号 = '2.0.5';
 const 悬浮窗启动方式 = 0;
+const 顶部打印日志开关 = false; // true=显示并启用日志，false=隐藏并禁用日志
 
 const MEMBERSHIP_CONFIG = {
     apiBase: "https://membership.8188811.xyz/api",
@@ -113,6 +114,7 @@ function 初始化控件信息() {
     控件信息.memberExpireAt = 控件信息.memberExpireAt || "无";
     控件信息.memberAvailable = 控件信息.memberAvailable === true;
     控件信息.loginCaptchaEnabled = 控件信息.loginCaptchaEnabled === true;
+    控件信息.打印日志 = 顶部打印日志开关 ? (控件信息.打印日志 === true) : false;
     控件信息.账号 = 控件信息.账号 || "";
     控件信息.密码 = 控件信息.密码 || "";
 }
@@ -121,7 +123,25 @@ function 保存控件信息() {
     storage.put("控件存储", 控件信息);
 }
 
+function 日志功能可用() {
+    return 顶部打印日志开关 === true;
+}
+
+function 日志输出已开启() {
+    return 日志功能可用() && 控件信息 && 控件信息.打印日志 === true;
+}
+
+function 刷新日志入口状态() {
+    if (ui.日志卡片) {
+        ui.日志卡片.attr("visibility", 日志功能可用() ? "visible" : "gone");
+    }
+    if (ui.查看日志) {
+        ui.查看日志.attr("visibility", 日志输出已开启() ? "visible" : "gone");
+    }
+}
+
 function 记录关键日志(tag, payload) {
+    if (!日志功能可用()) return;
     let text = "[Membership][" + tag + "] ";
     if (typeof payload == "string") {
         text += payload;
@@ -134,7 +154,7 @@ function 记录关键日志(tag, payload) {
     }
     console.log(text);
     try {
-        if (控件信息 && 控件信息.打印日志) {
+        if (日志输出已开启()) {
             myConsole(text);
         }
     } catch (e) {}
@@ -212,7 +232,8 @@ function 刷新操作记录统计() {
 function 同步首页状态() {
     ui.无障碍 && (ui.无障碍.checked = auto.service != null);
     ui.悬浮窗 && (ui.悬浮窗.checked = floaty.checkPermission() != false);
-    ui.打印日志 && (ui.打印日志.checked = 控件信息.打印日志 == true);
+    ui.打印日志 && (ui.打印日志.checked = 日志输出已开启());
+    刷新日志入口状态();
     刷新我的页面();
     刷新操作记录统计();
 }
@@ -1096,7 +1117,7 @@ function 首页ui() {
                                         </horizontal> */}
                                     </vertical>
                                 </card>
-                                <card w="*" h="auto" cardCornerRadius="10dp"
+                                <card id='日志卡片' w="*" h="auto" cardCornerRadius="10dp"
                                     marginTop="5dp" cardBackgroundColor='#F1F9FA' cardElevation="0dp"  >
                                     <vertical padding="15dp 22dp ">
                                         <horizontal gravity="center_vertical" >
@@ -1156,6 +1177,7 @@ function 首页ui() {
     ui.viewpager.setTitles(["运行设置", "使用教程"]);
     ui.tabs.setupWithViewPager(ui.viewpager);
     ui.操作记录list && ui.操作记录list.setDataSource(控件信息.操作记录list || []);
+    刷新日志入口状态();
     加载使用教程页面();
     ui.充值按钮 && ui.充值按钮.on("click", function () {
         threads.start(function () {
@@ -1193,7 +1215,11 @@ function 首页ui() {
             });
         }
     }
-    ui.打印日志.on("check", function (checked) { 控件信息.打印日志 = checked });
+    ui.打印日志 && ui.打印日志.on("check", function (checked) {
+        控件信息.打印日志 = 日志功能可用() && checked;
+        保存控件信息();
+        刷新日志入口状态();
+    });
 
     /*当离开本界面时保存todoList*/
     ui.emitter.on("pause", () => {
@@ -1506,6 +1532,7 @@ function 打开充值弹窗() {
 }
 
 function myConsole(textStr) {
+    if (!日志输出已开启()) return;
     日志({ 文本: textStr });
 }
 
@@ -3884,6 +3911,7 @@ function foundation() {
     };
 
     日志 = function (参数) {
+        if (!日志输出已开启()) return;
         参数 = 参数 || {};
         参数.rgb = 参数.rgb || '灰色';
         if (参数.打印 == undefined) 参数.打印 = true;
