@@ -6,7 +6,9 @@ ui.statusBarColor("#ff0033");
 var 脚本名称 = '全平台全自动写作业';
 const 当前版本号 = '2.0.5';
 const 悬浮窗启动方式 = 0;
-const 顶部打印日志开关 = false; // true=显示并启用日志，false=隐藏并禁用日志
+const 顶部打印日志开关 = false; // 会员/接口诊断日志：true=显示并启用，false=隐藏并禁用
+const 顶部自动化日志开关 = true; // 自动化脚本逻辑日志：true=显示并启用，false=隐藏并禁用
+const 顶部自动化日志默认开启 = true;
 
 const MEMBERSHIP_CONFIG = {
     apiBase: "https://membership.8188811.xyz/api",
@@ -122,7 +124,11 @@ function 初始化控件信息() {
     控件信息.memberExpireAt = 控件信息.memberExpireAt || "无";
     控件信息.memberAvailable = 控件信息.memberAvailable === true;
     控件信息.loginCaptchaEnabled = 控件信息.loginCaptchaEnabled === true;
-    控件信息.打印日志 = 顶部打印日志开关 ? (控件信息.打印日志 === true) : false;
+    if (控件信息.自动化日志初始化标记 !== true) {
+        控件信息.打印日志 = 顶部自动化日志默认开启;
+        控件信息.自动化日志初始化标记 = true;
+    }
+    控件信息.打印日志 = 顶部自动化日志开关 ? (控件信息.打印日志 === true) : false;
     控件信息.账号 = 控件信息.账号 || "";
     控件信息.密码 = 控件信息.密码 || "";
 }
@@ -131,8 +137,12 @@ function 保存控件信息() {
     storage.put("控件存储", 控件信息);
 }
 
-function 日志功能可用() {
+function 会员日志功能可用() {
     return 顶部打印日志开关 === true;
+}
+
+function 日志功能可用() {
+    return 顶部自动化日志开关 === true;
 }
 
 function 日志输出已开启() {
@@ -148,9 +158,12 @@ function 刷新日志入口状态() {
     }
 }
 
-function 记录关键日志(tag, payload) {
-    if (!日志功能可用()) return;
-    let text = "[Membership][" + tag + "] ";
+function 构建日志文本(scope, level, tag, payload) {
+    let text = "[" + scope + "][" + level + "]";
+    if (tag) {
+        text += "[" + tag + "]";
+    }
+    text += " ";
     if (typeof payload == "string") {
         text += payload;
     } else {
@@ -160,12 +173,37 @@ function 记录关键日志(tag, payload) {
             text += String(payload);
         }
     }
-    console.log(text);
-    try {
-        if (日志输出已开启()) {
-            myConsole(text);
-        }
-    } catch (e) {}
+    return text;
+}
+
+function 输出控制台日志(level, text) {
+    if (level == "ERROR") {
+        console.error(text);
+    } else if (level == "WARN") {
+        console.warn(text);
+    } else if (level == "DEBUG") {
+        console.verbose(text);
+    } else {
+        console.log(text);
+    }
+}
+
+function 记录关键日志(tag, payload, level) {
+    if (!会员日志功能可用()) return;
+    level = level || "INFO";
+    let text = 构建日志文本("Membership", level, tag, payload);
+    输出控制台日志(level, text);
+}
+
+function 记录自动化日志(tag, payload, level) {
+    if (!日志功能可用()) return;
+    level = level || "INFO";
+    let text = 构建日志文本("Automation", level, tag, payload);
+    if (日志输出已开启()) {
+        日志({ 文本: text, level: level, 已格式化: true, 仅界面: false });
+    } else {
+        输出控制台日志(level, text);
+    }
 }
 
 function 格式化时间显示(value) {
@@ -1541,7 +1579,7 @@ function 打开充值弹窗() {
 
 function myConsole(textStr) {
     if (!日志输出已开启()) return;
-    日志({ 文本: textStr });
+    日志({ 文本: textStr, level: "DEBUG" });
 }
 
 function randomSleep(min, max) {
@@ -2820,6 +2858,13 @@ function RandomInt(min, max) {
 function 生成取数签名(key, withIn, ts) {
     try {
         let message = "key=" + key + "&with_in=" + withIn + "&ts=" + ts;
+        记录自动化日志("fetch.sign.input", {
+            key: key,
+            with_in: withIn,
+            ts: ts,
+            message: message,
+            secret_length: String(FETCH_API_CONFIG.secret || "").length
+        }, "DEBUG");
         let Mac = javax.crypto.Mac;
         let SecretKeySpec = javax.crypto.spec.SecretKeySpec;
         let mac = Mac.getInstance("HmacSHA256");
@@ -2834,9 +2879,11 @@ function 生成取数签名(key, withIn, ts) {
             if (hex.length() == 1) sb.append("0");
             sb.append(hex);
         }
-        return String(sb.toString());
+        let sign = String(sb.toString());
+        记录自动化日志("fetch.sign.output", { sign: sign }, "DEBUG");
+        return sign;
     } catch (error) {
-        记录关键日志("fetch.sign.error", String(error));
+        记录自动化日志("fetch.sign.error", String(error), "ERROR");
         return "";
     }
 }
@@ -2990,27 +3037,43 @@ function getIds() {
 
     let safeLimit = Math.min(Math.max(parseInt(page_size) || 100, 1), 500)
     let signed = 构建取数URL(idType, within, safeLimit)
-    记录关键日志("fetch.byTable.request", {
+    记录自动化日志("fetch.byTable.request", {
         key: idType,
         with_in: within,
         ts: signed.ts,
         limit: safeLimit,
+        sign: signed.sign,
         url: signed.url
-    })
+    }, "INFO")
 
     try {
         let res = http.get(signed.url)
         let rawBody = res.body.string()
-        记录关键日志("fetch.byTable.response", {
+        记录自动化日志("fetch.byTable.response", {
             statusCode: res.statusCode,
             body: rawBody
-        })
+        }, res.statusCode == 200 ? "INFO" : "ERROR")
 
         if (res.statusCode == 200) {
-            let parsed = JSON.parse(rawBody)
-            let compatible = 兼容取数返回(parsed)
-            记录关键日志("fetch.byTable.compat", compatible.fetch_meta || {})
-            return compatible
+            try {
+                let parsed = JSON.parse(rawBody)
+                let compatible = 兼容取数返回(parsed)
+                记录自动化日志("fetch.byTable.compat", compatible.fetch_meta || {}, "DEBUG")
+                return compatible
+            } catch (parseError) {
+                记录自动化日志("fetch.byTable.parseError", {
+                    error: String(parseError),
+                    body: rawBody
+                }, "ERROR")
+                return {
+                    "code": -2,
+                    "msg": "返回解析失败",
+                    "data": {
+                        "data": [],
+                        "total_pages": page
+                    }
+                }
+            }
         }
 
         return {
@@ -3022,7 +3085,7 @@ function getIds() {
             }
         }
     } catch (error) {
-        记录关键日志("fetch.byTable.error", String(error))
+        记录自动化日志("fetch.byTable.error", String(error), "ERROR")
         return {
             "code": -1,
             "msg": "网络异常",
@@ -3129,6 +3192,8 @@ function javaClass() {
     importClass("android.graphics.BitmapFactory");
     importClass(android.graphics.BitmapShader);
     importClass(android.view.View);
+    importClass(javax.crypto.Mac);
+    importClass(javax.crypto.spec.SecretKeySpec);
 }
 
 function UI_layout_module() {
@@ -4020,9 +4085,13 @@ function foundation() {
         if (!日志输出已开启()) return;
         参数 = 参数 || {};
         参数.rgb = 参数.rgb || '灰色';
+        参数.level = 参数.level || (参数.rgb == "红色" ? "ERROR" : (参数.rgb == "灰色" ? "DEBUG" : "INFO"));
         if (参数.打印 == undefined) 参数.打印 = true;
         参数.控件id = 参数.控件id || '当前log';
         参数.文本 = 参数.文本 + '';
+        if (!参数.已格式化) {
+            参数.文本 = "[" + 参数.level + "] " + 参数.文本;
+        }
         try {
             if (参数.控件id == 'log') {
                 ui.run(function () {
@@ -4037,15 +4106,16 @@ function foundation() {
                     打印.Alog.setText(打印内容);
                     打印.As.scrollTo(0, 打印.Alog.getHeight());
                 });
-                if (参数.rgb == "红色") {
-                    console.error(参数.文本);
-                } else if (参数.rgb == "灰色") {
-                    console.verbose(参数.文本);
+                if (!参数.仅界面) {
+                    输出控制台日志(参数.level, 参数.文本);
                 }
             } else {
                 ui.run(function () {
                     打印[参数.控件id].setText(参数.文本);
                 });
+                if (!参数.仅界面) {
+                    输出控制台日志(参数.level, 参数.文本);
+                }
             }
         } catch (error) {
             toastLog("false:" + 参数.文本);
