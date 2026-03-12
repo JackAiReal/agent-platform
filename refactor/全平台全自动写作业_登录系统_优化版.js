@@ -819,6 +819,125 @@ function 首页ui() {
                             </vertical >
                         </appbar>
                         <viewpager id="viewpager" isScrollContainer="false">
+
+                            <scroll   >
+                                <vertical gravity="center_vertical" padding='10'>
+
+                                    <brdcr-layout foid='false' w='*'   >
+                                        <vertical gravity="center_vertical" padding='10'>
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <text text="平台: " />
+                                                <spinner id="platForms" entries="{{platForms}}" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                            </horizontal>
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <text textSize="15sp">功能选择：</text>
+                                                <checkbox visibility="gone" id="添加用户_box" checked="{{控件信息.添加用户_box}}" text='添加' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <checkbox id="私信用户_box" checked="{{控件信息.私信用户_box}}" text='私信' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <checkbox visibility="gone" id="拨打语音_box" checked="{{控件信息.拨打语音_box}}" text='拨打' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <checkbox id="发送图片_box" checked="{{控件信息.发送图片_box}}" text='发图' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                            </horizontal>
+
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <text textSize="15sp">优化功能：</text>
+                                                <checkbox id="重复不写_box" checked="{{控件信息.重复不写_box}}" text='重复不写' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                            </horizontal>
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <text textSize="15sp">性别选择：</text>
+                                                <checkbox id="写男_box" checked="{{控件信息.写男_box}}" text='男' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <checkbox id="写女_box" checked="{{控件信息.写女_box}}" text='女' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                            </horizontal>
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <text textSize="15sp">过滤模特：</text>
+                                                <checkbox id="过滤男模_box" checked="{{控件信息.过滤男模_box}}" text='过滤男模' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <checkbox id="过滤女模_box" checked="{{控件信息.过滤女模_box}}" text='过滤女模' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                            </horizontal>
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='auto' gravity='center_vertical' >
+                                                <checkbox id="消费范围_box" checked="{{控件信息.消费范围_box}}" text="消费范围：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <input-layout layout_weight="1" h='25dp' id="消费最低" text="{{控件信息.消费最低||'1'}}"></input-layout>
+                                                <text textSize="15sp">~</text>
+                                                <input-layout layout_weight="1" h='25dp' id="消费最高" text="{{控件信息.消费最高||'999999'}}"></input-layout>
+                                            </horizontal  >
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='auto' gravity='center_vertical' >
+                                                <text text='操作阈值：' w="auto" h="auto" textSize="15sp" ></text>
+                                                <input-layout layout_weight="1" h='25dp' id="操作阈值" text="{{控件信息.操作阈值||'999'}}"></input-layout>
+                                                <text textSize="15sp">条数据后停止运行</text>
+                                            </horizontal  >
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal visibility="gone" w='*' h='auto' gravity='center_vertical' >
+                                                <text text='拨打停留：' w="auto" h="auto" textSize="15sp" ></text>
+                                                <input-layout id="拨打停留小" style="number" text="{{控件信息.拨打停留小||'5'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">秒 至</text>
+                                                <input-layout id="拨打停留大" style="number" text="{{控件信息.拨打停留大||'10'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">秒</text>
+                                            </horizontal  >
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <checkbox id="操作延迟_box" checked="{{控件信息.操作延迟_box}}" text="操作延迟：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <input-layout id="操作延迟小" style="number" text="{{控件信息.操作延迟小||'500'}}" hint="毫秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">毫秒 至</text>
+                                                <input-layout id="操作延迟大" style="number" text="{{控件信息.操作延迟大||'1500'}}" hint="毫秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">毫秒</text>
+                                            </horizontal>
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal visibility="gone" w='*' h='auto' gravity='center_vertical' >
+                                                <text text='号码数据：' w="auto" h="auto" textSize="15sp" ></text>
+                                                <input-layout layout_weight="1" h='25dp' id="号码数据path" text="{{控件信息.号码数据path||'/sdcard/Pictures/号码数据.txt'}}"></input-layout>
+                                                <card w="auto" h="*" cardCornerRadius="2dp"
+                                                    cardBackgroundColor='#03A9F4' cardElevation="0dp" id='选择号码数据path' marginLeft='5dp'>
+                                                    <horizontal w="*" h="*" padding="5dp 0dp">
+                                                        <text w="auto" h="auto" textSize="15sp" textColor="#ffffff" text="选择"
+                                                            layout_gravity='center_vertical' />
+                                                    </horizontal>
+                                                </card>
+                                            </horizontal  >
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <checkbox id="图片位置_box" checked="{{控件信息.图片位置_box}}" text="图片位置：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <input-layout id="图片位置" text="{{控件信息.图片位置||'1,2'}}" hint="位置 英文逗号分开(整数型)" h='*' layout_weight="1"></input-layout>
+                                            </horizontal>
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <checkbox id="任务间隔_box" checked="{{控件信息.任务间隔_box}}" text="任务间隔：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <input-layout id="任务间隔小" style="number" text="{{控件信息.任务间隔小||'2'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">秒 至</text>
+                                                <input-layout id="任务间隔大" style="number" text="{{控件信息.任务间隔大||'5'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">秒</text>
+                                            </horizontal>
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <checkbox id="搜索坐标_box" checked="{{控件信息.搜索坐标_box}}" text="(模拟器不勾)X{{width}}：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <input-layout id="搜索位置X" style="number" text="{{控件信息.搜索位置X||parseInt(width * 0.96)}}" hint="" h='*' layout_weight="1"></input-layout>
+                                                <text text="Y{{height}}" textSize="15sp"></text>
+                                                <input-layout id="搜索位置Y" style="number" text="{{控件信息.搜索位置Y||parseInt(height * 0.96)}}" hint="" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp"></text>
+                                            </horizontal>
+
+                                        </vertical>
+                                    </brdcr-layout>
+
+                                    <frame h='0' w='*' bg="#D4D4D4" margin="10 5" />
+                                    <ku-layout KuType="文字" Kuid="话术库list" KuName="话术库"  ></ku-layout>
+                                    <frame h='0' w='*' bg="#D4D4D4" margin="10 5" />
+                                    <ku-layout KuType="文字" Kuid="本地ID库list" KuName="本地ID库"  ></ku-layout>
+
+                                </vertical>
+                            </scroll >
+
                             <frame>
                                 <vertical w="*" h="*" padding="12dp 12dp 12dp 12dp">
                                     <text text="使用教程" textSize="18sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
