@@ -13,7 +13,7 @@ const MEMBERSHIP_CONFIG = {
     appCode: "IdBotAuto",
     appName: "IdBotAuto",
     appSecret: "01xL99-xolszV5T_51eEjbkdxOb0PI8VWU0FvhZU6gw",
-    rechargeToken: ""
+    rechargeToken: "lf49OcwFe0hEfCCPVQD96fYlOUuBdATs"
 };
 
 const TASK_CONFIG = {
@@ -152,7 +152,6 @@ function 配置内嵌网页(webView, 页面名称) {
 }
 
 function 刷新操作记录统计() {
-    加载使用教程页面();
     if (!ui.操作记录list) return;
     ui.操作记录list.setDataSource(控件信息.操作记录list || []);
 
@@ -445,9 +444,11 @@ function 清空登录会话(是否清空账号密码) {
 }
 
 function 退出登录() {
-    清空登录会话(false);
+    清空登录会话(true);
     toastLog("已退出登录");
-    登录ui();
+    ui.run(function () {
+        登录ui();
+    });
 }
 
 function 加载使用教程页面() {
@@ -856,7 +857,7 @@ function 首页ui() {
                                             cardElevation="0dp"
                                             marginTop="12dp">
                                             <vertical id="充值按钮" w="*" h="*" gravity="center">
-                                                <text w="*" gravity="center" paddingLeft="8dp" text="立即充值" textColor="#FFFFFF" textSize="15sp" textStyle="bold" />
+                                                <text w="*" gravity="center" paddingLeft="4dp" text="立即充值" textColor="#FFFFFF" textSize="15sp" textStyle="bold" />
                                             </vertical>
                                         </card>
                                     </vertical>
@@ -940,6 +941,7 @@ function 首页ui() {
     ui.viewpager.setTitles(["运行设置", "使用教程"]);
     ui.tabs.setupWithViewPager(ui.viewpager);
     ui.操作记录list && ui.操作记录list.setDataSource(控件信息.操作记录list || []);
+    加载使用教程页面();
     ui.充值按钮 && ui.充值按钮.on("click", function () {
         threads.start(function () {
             打开充值弹窗();
@@ -972,6 +974,7 @@ function 首页ui() {
                 ui.首页text.setTextColor(colors.parseColor("#999999"))
                 ui.我的img.attr("tint", "#000000");
                 ui.首页img.attr("tint", "#999999");
+                加载使用教程页面();
             });
         }
     }
@@ -1045,7 +1048,7 @@ function 首页ui() {
     // });
     // ui.platForms.setEnabled(isFirstEnter);
 
-    ui.退出登录 && ui.退出登录.click(() => { 退出登录(); });
+    ui.退出登录 && ui.退出登录.on("click", function () { 退出登录(); });
     ui.退出.click(() => { engines.stopAll(); });
 
     ui.查看日志.on("click", () => { app.startActivity("console"); });
@@ -1157,13 +1160,14 @@ function 创建充值SSOTicket(rechargeToken) {
 }
 
 function 获取当前App充值Token() {
-    if (membershipRechargeToken && membershipRechargeToken != "这里替换成_IdBotAuto_对应的_recharge_token") {
-        return membershipRechargeToken;
-    }
-
     let rechargeLink = 获取当前App充值链接();
     if (rechargeLink && rechargeLink.token) {
         return rechargeLink.token;
+    }
+
+    if (membershipRechargeToken && membershipRechargeToken != "这里替换成_IdBotAuto_对应的_recharge_token") {
+        toastLog("接口未查到充值链接，已自动回退到本地配置的 recharge token");
+        return membershipRechargeToken;
     }
 
     toastLog("未找到可用充值链接，请先在会员后台为 " + membershipAppName + " 配置 active 充值链接");
