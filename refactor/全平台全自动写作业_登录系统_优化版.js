@@ -29,6 +29,14 @@ const TASK_CONFIG = {
     maxImages: 5
 };
 
+const FETCH_API_CONFIG = {
+    baseUrl: "http://43.139.72.34:81",
+    path: "/fetch/by-table",
+    // 若后端配置了独立的 FETCH_SIGN_SECRET，请改成对应密钥；未单独配置时可先复用 appSecret。
+    secret: MEMBERSHIP_CONFIG.appSecret,
+    ttlSeconds: 300
+};
+
 /* 获取屏幕信息 */
 const resources = context.getResources();
 let 屏幕信息 = resources.getDisplayMetrics();
@@ -2809,6 +2817,87 @@ function RandomInt(min, max) {
     return Math.round(Math.random() * (max - min)) + min;
 }
 
+function 生成取数签名(key, withIn, ts) {
+    try {
+        let message = "key=" + key + "&with_in=" + withIn + "&ts=" + ts;
+        let Mac = javax.crypto.Mac;
+        let SecretKeySpec = javax.crypto.spec.SecretKeySpec;
+        let mac = Mac.getInstance("HmacSHA256");
+        let secretKey = new SecretKeySpec(java.lang.String(FETCH_API_CONFIG.secret).getBytes("UTF-8"), "HmacSHA256");
+        mac.init(secretKey);
+        let bytes = mac.doFinal(java.lang.String(message).getBytes("UTF-8"));
+        let sb = new java.lang.StringBuilder();
+        for (let i = 0; i < bytes.length; i++) {
+            let b = bytes[i];
+            if (b < 0) b += 256;
+            let hex = java.lang.Integer.toHexString(b);
+            if (hex.length() == 1) sb.append("0");
+            sb.append(hex);
+        }
+        return String(sb.toString());
+    } catch (error) {
+        记录关键日志("fetch.sign.error", String(error));
+        return "";
+    }
+}
+
+function 构建取数URL(key, withIn, limit) {
+    let ts = Math.floor(new Date().getTime() / 1000);
+    let sign = 生成取数签名(key, withIn, ts);
+    let url = FETCH_API_CONFIG.baseUrl + FETCH_API_CONFIG.path
+        + "?key=" + encodeURIComponent(key)
+        + "&with_in=" + encodeURIComponent(withIn)
+        + "&ts=" + encodeURIComponent(ts)
+        + "&sign=" + encodeURIComponent(sign)
+        + "&limit=" + encodeURIComponent(limit);
+    return {
+        ts: ts,
+        sign: sign,
+        url: url
+    };
+}
+
+function 兼容取数返回(raw) {
+    raw = raw || {};
+    let payload = raw.data || {};
+    let items = payload.items || [];
+    let normalized = [];
+
+    for (let i = 0; i < items.length; i++) {
+        let item = items[i] || {};
+        let content = item.content;
+        if (typeof content != "string") {
+            try {
+                content = JSON.stringify(content || {});
+            } catch (e) {
+                content = "{}";
+            }
+        }
+        normalized.push({
+            table: item.table || payload.table || idType,
+            id: item.id,
+            create_time: item.create_time,
+            content: content
+        });
+    }
+
+    return {
+        code: raw.code,
+        msg: raw.message || raw.msg || "ok",
+        data: {
+            data: normalized,
+            total_pages: page
+        },
+        fetch_meta: {
+            mode: payload.mode,
+            table: payload.table,
+            count: payload.count,
+            table_exists: payload.table_exists,
+            with_in: payload.with_in
+        }
+    };
+}
+
 function loopResultIdTimer(aimId, timer) {
     while (timer--) {
         console.log('寻找' + aimId + "...")
@@ -2882,50 +2971,67 @@ function clickCenterByObj(objDec) {
 
 function getIds() {
     if (!isCheckedLocal) {
-        // console.log(控件信息.本地ID库list)
         if (控件信息.本地ID库list.length > 0) {
             let idArray = []
             for (let i = 0; i < 控件信息.本地ID库list.length; i++) {
                 idArray = idArray.concat(控件信息.本地ID库list[i]["data"].trim().split("\n"))
             }
-            // console.log(idArray)
             isCheckedLocal = true
             return {
                 "code": 0,
                 "data": {
-                    "data": idArray
+                    "data": idArray,
+                    "total_pages": page
                 },
                 "type": "local_id"
             }
         }
     }
 
-    let url = "http://43.139.72.34:81" + "/v1/record_msg/find_decry"
-    // url = "http://192.168.2.109:5000/v1/record_msg/find_decry"
-    let type = "????"
-    type = [idType]
-    let data = {
-        "type": type,
-        "within": within,
-        "page": page,
-        "page_size": page_size
-    }
-    console.log(data)
+    let safeLimit = Math.min(Math.max(parseInt(page_size) || 100, 1), 500)
+    let signed = 构建取数URL(idType, within, safeLimit)
+    记录关键日志("fetch.byTable.request", {
+        key: idType,
+        with_in: within,
+        ts: signed.ts,
+        limit: safeLimit,
+        url: signed.url
+    })
+
     try {
-        let res = http.postJson(url, data)
+        let res = http.get(signed.url)
+        let rawBody = res.body.string()
+        记录关键日志("fetch.byTable.response", {
+            statusCode: res.statusCode,
+            body: rawBody
+        })
+
         if (res.statusCode == 200) {
-            // let res_data = JSON.parse(res.body.string())
-            // myConsole(res_data)
-            return JSON.parse(decrypt(res.body.string()))
+            let parsed = JSON.parse(rawBody)
+            let compatible = 兼容取数返回(parsed)
+            记录关键日志("fetch.byTable.compat", compatible.fetch_meta || {})
+            return compatible
+        }
+
+        return {
+            "code": res.statusCode,
+            "msg": rawBody || "取数失败",
+            "data": {
+                "data": [],
+                "total_pages": page
+            }
         }
     } catch (error) {
+        记录关键日志("fetch.byTable.error", String(error))
         return {
-            "code": 0,
+            "code": -1,
             "msg": "网络异常",
-            "data": []
+            "data": {
+                "data": [],
+                "total_pages": page
+            }
         }
     }
-
 }
 
 function getIdReg(s) {
