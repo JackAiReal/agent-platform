@@ -33,7 +33,7 @@ const TASK_CONFIG = {
 
 const FETCH_API_CONFIG = {
     baseUrl: "http://43.139.72.34:81",
-    path: "/fetch/by-table",
+    paths: ["/fetch/by-table", "/v1/fetch/by-table"],
     // 若后端配置了独立的 FETCH_SIGN_SECRET，请改成对应密钥；未单独配置时可先复用 appSecret。
     secret: MEMBERSHIP_CONFIG.appSecret,
     ttlSeconds: 300
@@ -2888,16 +2888,17 @@ function 生成取数签名(key, withIn, ts) {
     }
 }
 
-function 构建取数URL(key, withIn, limit) {
+function 构建取数URL(path, key, withIn, limit) {
     let ts = Math.floor(new Date().getTime() / 1000);
     let sign = 生成取数签名(key, withIn, ts);
-    let url = FETCH_API_CONFIG.baseUrl + FETCH_API_CONFIG.path
+    let url = FETCH_API_CONFIG.baseUrl + path
         + "?key=" + encodeURIComponent(key)
         + "&with_in=" + encodeURIComponent(withIn)
         + "&ts=" + encodeURIComponent(ts)
         + "&sign=" + encodeURIComponent(sign)
         + "&limit=" + encodeURIComponent(limit);
     return {
+        path: path,
         ts: ts,
         sign: sign,
         url: url
@@ -3036,63 +3037,91 @@ function getIds() {
     }
 
     let safeLimit = Math.min(Math.max(parseInt(page_size) || 100, 1), 500)
-    let signed = 构建取数URL(idType, within, safeLimit)
-    记录自动化日志("fetch.byTable.request", {
-        key: idType,
-        with_in: within,
-        ts: signed.ts,
-        limit: safeLimit,
-        sign: signed.sign,
-        url: signed.url
-    }, "INFO")
+    let candidatePaths = FETCH_API_CONFIG.paths || ["/fetch/by-table"]
+    let lastErrorMsg = "取数失败"
 
-    try {
-        let res = http.get(signed.url)
-        let rawBody = res.body.string()
-        记录自动化日志("fetch.byTable.response", {
-            statusCode: res.statusCode,
-            body: rawBody
-        }, res.statusCode == 200 ? "INFO" : "ERROR")
+    for (let i = 0; i < candidatePaths.length; i++) {
+        let signed = 构建取数URL(candidatePaths[i], idType, within, safeLimit)
+        记录自动化日志("fetch.byTable.request", {
+            attempt: i + 1,
+            path: signed.path,
+            key: idType,
+            with_in: within,
+            ts: signed.ts,
+            limit: safeLimit,
+            sign: signed.sign,
+            url: signed.url
+        }, "INFO")
 
-        if (res.statusCode == 200) {
-            try {
-                let parsed = JSON.parse(rawBody)
-                let compatible = 兼容取数返回(parsed)
-                记录自动化日志("fetch.byTable.compat", compatible.fetch_meta || {}, "DEBUG")
-                return compatible
-            } catch (parseError) {
-                记录自动化日志("fetch.byTable.parseError", {
-                    error: String(parseError),
-                    body: rawBody
-                }, "ERROR")
-                return {
-                    "code": -2,
-                    "msg": "返回解析失败",
-                    "data": {
-                        "data": [],
-                        "total_pages": page
+        try {
+            let res = http.get(signed.url)
+            let rawBody = res.body.string()
+            记录自动化日志("fetch.byTable.response", {
+                attempt: i + 1,
+                path: signed.path,
+                statusCode: res.statusCode,
+                body: rawBody
+            }, res.statusCode == 200 ? "INFO" : "ERROR")
+
+            if (res.statusCode == 404) {
+                lastErrorMsg = rawBody || "404 Not Found"
+                记录自动化日志("fetch.byTable.routeNotFound", {
+                    attempt: i + 1,
+                    path: signed.path,
+                    nextPath: candidatePaths[i + 1] || null
+                }, "WARN")
+                continue
+            }
+
+            if (res.statusCode == 200) {
+                try {
+                    let parsed = JSON.parse(rawBody)
+                    let compatible = 兼容取数返回(parsed)
+                    记录自动化日志("fetch.byTable.compat", compatible.fetch_meta || {}, "DEBUG")
+                    return compatible
+                } catch (parseError) {
+                    记录自动化日志("fetch.byTable.parseError", {
+                        attempt: i + 1,
+                        path: signed.path,
+                        error: String(parseError),
+                        body: rawBody
+                    }, "ERROR")
+                    return {
+                        "code": -2,
+                        "msg": "返回解析失败",
+                        "data": {
+                            "data": [],
+                            "total_pages": page
+                        }
                     }
                 }
             }
-        }
 
-        return {
-            "code": res.statusCode,
-            "msg": rawBody || "取数失败",
-            "data": {
-                "data": [],
-                "total_pages": page
+            lastErrorMsg = rawBody || "取数失败"
+            return {
+                "code": res.statusCode,
+                "msg": lastErrorMsg,
+                "data": {
+                    "data": [],
+                    "total_pages": page
+                }
             }
+        } catch (error) {
+            lastErrorMsg = String(error)
+            记录自动化日志("fetch.byTable.error", {
+                attempt: i + 1,
+                path: signed.path,
+                error: lastErrorMsg
+            }, "ERROR")
         }
-    } catch (error) {
-        记录自动化日志("fetch.byTable.error", String(error), "ERROR")
-        return {
-            "code": -1,
-            "msg": "网络异常",
-            "data": {
-                "data": [],
-                "total_pages": page
-            }
+    }
+
+    return {
+        "code": -1,
+        "msg": lastErrorMsg || "网络异常",
+        "data": {
+            "data": [],
+            "total_pages": page
         }
     }
 }
