@@ -10,8 +10,8 @@ const 悬浮窗启动方式 = 0;
 const MEMBERSHIP_CONFIG = {
     apiBase: "https://membership.8188811.xyz/api",
     shareUrl: "https://membership.8188811.xyz/share/VoBJgMG8j7Qiog1jh3uRIhi7aCgkAFfZ",
-    appCode: "IDBot",
-    appName: "IDBot",
+    appCode: "IdBotAuto",
+    appName: "IdBotAuto",
     appSecret: "01xL99-xolszV5T_51eEjbkdxOb0PI8VWU0FvhZU6gw",
     rechargeToken: ""
 };
@@ -152,6 +152,7 @@ function 配置内嵌网页(webView, 页面名称) {
 }
 
 function 刷新操作记录统计() {
+    加载使用教程页面();
     if (!ui.操作记录list) return;
     ui.操作记录list.setDataSource(控件信息.操作记录list || []);
 
@@ -428,7 +429,54 @@ function 获取当前App充值链接() {
     }
 }
 
-登录ui();
+function 清空登录会话(是否清空账号密码) {
+    控件信息.token = "";
+    控件信息.refresh_token = "";
+    控件信息.userInfo = null;
+    控件信息.entitlements = [];
+    控件信息.memberAvailable = false;
+    控件信息.loginCaptchaEnabled = false;
+    重置会员信息();
+    if (是否清空账号密码) {
+        控件信息.账号 = "";
+        控件信息.密码 = "";
+    }
+    保存控件信息();
+}
+
+function 退出登录() {
+    清空登录会话(false);
+    toastLog("已退出登录");
+    登录ui();
+}
+
+function 加载使用教程页面() {
+    if (!ui.使用教程网页) return;
+    配置内嵌网页(ui.使用教程网页, "使用教程");
+    ui.使用教程网页.loadUrl("https://www.baidu.com");
+}
+
+function 启动入口() {
+    if (!控件信息.token) {
+        登录ui();
+        return;
+    }
+
+    threads.start(function () {
+        let ok = 获取我的信息();
+        ui.run(function () {
+            if (ok) {
+                首页ui();
+                toastLog("已恢复登录状态");
+            } else {
+                清空登录会话(false);
+                登录ui();
+            }
+        });
+    });
+}
+
+启动入口();
 
 function 登录ui() {
     ui.layout(
@@ -770,201 +818,13 @@ function 首页ui() {
                             </vertical >
                         </appbar>
                         <viewpager id="viewpager" isScrollContainer="false">
-
-                            <scroll   >
-                                <vertical gravity="center_vertical" padding='10'>
-
-                                    <brdcr-layout foid='false' w='*'   >
-                                        <vertical gravity="center_vertical" padding='10'>
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                                <text text="平台: " />
-                                                <spinner id="platForms" entries="{{platForms}}" w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                            </horizontal>
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                                <text textSize="15sp">功能选择：</text>
-                                                <checkbox visibility="gone" id="添加用户_box" checked="{{控件信息.添加用户_box}}" text='添加' w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <checkbox id="私信用户_box" checked="{{控件信息.私信用户_box}}" text='私信' w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <checkbox visibility="gone" id="拨打语音_box" checked="{{控件信息.拨打语音_box}}" text='拨打' w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <checkbox id="发送图片_box" checked="{{控件信息.发送图片_box}}" text='发图' w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                            </horizontal>
-
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                                <text textSize="15sp">优化功能：</text>
-                                                <checkbox id="重复不写_box" checked="{{控件信息.重复不写_box}}" text='重复不写' w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                            </horizontal>
-
-                                            {/* <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                            <text text='性别过滤(开选择男 关选择女)：' w="auto" h="auto" textSize="15sp" ></text>
-                                            <Switch  id="过滤男女_box"  w="auto" h="auto" checked="{{控件信息.过滤男女_box}}" padding="8 8 8 8" />
-                                            </horizontal> */}
-
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                                <text textSize="15sp">性别选择：</text>
-                                                <checkbox id="写男_box" checked="{{控件信息.写男_box}}" text='男' w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <checkbox id="写女_box" checked="{{控件信息.写女_box}}" text='女' w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                            </horizontal>
-
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                                <text textSize="15sp">过滤模特：</text>
-                                                <checkbox id="过滤男模_box" checked="{{控件信息.过滤男模_box}}" text='过滤男模' w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <checkbox id="过滤女模_box" checked="{{控件信息.过滤女模_box}}" text='过滤女模' w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                            </horizontal>
-
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal w='*' h='auto' gravity='center_vertical' >
-                                                <checkbox id="消费范围_box" checked="{{控件信息.消费范围_box}}" text="消费范围：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <input-layout layout_weight="1" h='25dp' id="消费最低" text="{{控件信息.消费最低||'1'}}"></input-layout>
-                                                <text textSize="15sp">~</text>
-                                                <input-layout layout_weight="1" h='25dp' id="消费最高" text="{{控件信息.消费最高||'999999'}}"></input-layout>
-                                            </horizontal  >
-
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal w='*' h='auto' gravity='center_vertical' >
-                                                <text text='操作阈值：' w="auto" h="auto" textSize="15sp" ></text>
-                                                <input-layout layout_weight="1" h='25dp' id="操作阈值" text="{{控件信息.操作阈值||'999'}}"></input-layout>
-                                                <text textSize="15sp">条数据后停止运行</text>
-                                            </horizontal  >
-
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal visibility="gone" w='*' h='auto' gravity='center_vertical' >
-                                                <text text='拨打停留：' w="auto" h="auto" textSize="15sp" ></text>
-                                                <input-layout id="拨打停留小" style="number" text="{{控件信息.拨打停留小||'5'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
-                                                <text textSize="15sp">秒 至</text>
-                                                <input-layout id="拨打停留大" style="number" text="{{控件信息.拨打停留大||'10'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
-                                                <text textSize="15sp">秒</text>
-                                            </horizontal  >
-
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                                <checkbox id="操作延迟_box" checked="{{控件信息.操作延迟_box}}" text="操作延迟：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <input-layout id="操作延迟小" style="number" text="{{控件信息.操作延迟小||'500'}}" hint="毫秒(整数型)" h='*' layout_weight="1"></input-layout>
-                                                <text textSize="15sp">毫秒 至</text>
-                                                <input-layout id="操作延迟大" style="number" text="{{控件信息.操作延迟大||'1500'}}" hint="毫秒(整数型)" h='*' layout_weight="1"></input-layout>
-                                                <text textSize="15sp">毫秒</text>
-                                            </horizontal>
-
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal visibility="gone" w='*' h='auto' gravity='center_vertical' >
-                                                <text text='号码数据：' w="auto" h="auto" textSize="15sp" ></text>
-                                                <input-layout layout_weight="1" h='25dp' id="号码数据path" text="{{控件信息.号码数据path||'/sdcard/Pictures/号码数据.txt'}}"></input-layout>
-                                                <card w="auto" h="*" cardCornerRadius="2dp"
-                                                    cardBackgroundColor='#03A9F4' cardElevation="0dp" id='选择号码数据path' marginLeft='5dp'>
-                                                    <horizontal w="*" h="*" padding="5dp 0dp">
-                                                        <text w="auto" h="auto" textSize="15sp" textColor="#ffffff" text="选择"
-                                                            layout_gravity='center_vertical' />
-                                                    </horizontal>
-                                                </card>
-                                            </horizontal  >
-
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                                <checkbox id="图片位置_box" checked="{{控件信息.图片位置_box}}" text="图片位置：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <input-layout id="图片位置" text="{{控件信息.图片位置||'1,2'}}" hint="位置 英文逗号分开(整数型)" h='*' layout_weight="1"></input-layout>
-                                            </horizontal>
-
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                                <checkbox id="任务间隔_box" checked="{{控件信息.任务间隔_box}}" text="任务间隔：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <input-layout id="任务间隔小" style="number" text="{{控件信息.任务间隔小||'2'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
-                                                <text textSize="15sp">秒 至</text>
-                                                <input-layout id="任务间隔大" style="number" text="{{控件信息.任务间隔大||'5'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
-                                                <text textSize="15sp">秒</text>
-                                            </horizontal>
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                                <checkbox id="搜索坐标_box" checked="{{控件信息.搜索坐标_box}}" text="(模拟器不勾)X{{width}}：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <input-layout id="搜索位置X" style="number" text="{{控件信息.搜索位置X||parseInt(width * 0.96)}}" hint="" h='*' layout_weight="1"></input-layout>
-                                                <text text="Y{{height}}" textSize="15sp"></text>
-                                                <input-layout id="搜索位置Y" style="number" text="{{控件信息.搜索位置Y||parseInt(height * 0.96)}}" hint="" h='*' layout_weight="1"></input-layout>
-                                                <text textSize="15sp"></text>
-                                            </horizontal>
-
-                                            {/* <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                                <checkbox visibility="gone" id="随机插花_box" checked="{{控件信息.随机插花_box}}" text="随机插花" w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <checkbox visibility="gone" id="跳过重复_box" checked="{{控件信息.跳过重复_box}}" text="跳过重复" w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                            </horizontal> */}
-
-                                        </vertical>
-                                    </brdcr-layout>
-
-                                    <frame h='0' w='*' bg="#D4D4D4" margin="10 5" />
-                                    <ku-layout KuType="文字" Kuid="话术库list" KuName="话术库"  ></ku-layout>
-                                    <frame h='0' w='*' bg="#D4D4D4" margin="10 5" />
-                                    <ku-layout KuType="文字" Kuid="本地ID库list" KuName="本地ID库"  ></ku-layout>
-
+                            <frame>
+                                <vertical w="*" h="*" padding="12dp 12dp 12dp 12dp">
+                                    <text text="使用教程" textSize="18sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
+                                    <text text="当前先用百度首页占位，后面可以替换成正式教程页。" textSize="13sp" textColor="#666666" marginBottom="8dp" />
+                                    <webview id="使用教程网页" w="*" h="*" />
                                 </vertical>
-                            </scroll >
-
-                            <scroll   >
-                                <vertical gravity="center_vertical" padding='10'>
-                                    <brdcr-layout foid='false' w='*'   >
-                                        <vertical gravity="center_vertical" padding='10'>
-                                            <horizontal w="*" h="30dp" >
-                                                <card w="auto" h="*" cardCornerRadius="5dp"
-                                                    cardBackgroundColor='#DCDCDC' cardElevation="0dp" >
-                                                    <frame w="auto" h="*" >
-                                                        <text w="auto" h="auto" textSize="15sp" textColor="#000000"
-                                                            text="记录" layout_gravity='center' gravity='center' ems='4' />
-                                                    </frame>
-                                                </card>
-                                                <card w="auto" h="*" cardCornerRadius="5dp"
-                                                    cardBackgroundColor='#DCDCDC' cardElevation="0dp" layout_weight="1" marginLeft="5dp" >
-                                                    <frame w="*" h="*" >
-                                                        <text w="auto" h="auto" textSize="15sp" textColor="#000000"
-                                                            id='添加记录' text="添加:null" layout_gravity='center' gravity='center' />
-                                                    </frame>
-                                                </card>
-                                                <card w="auto" h="*" cardCornerRadius="5dp"
-                                                    cardBackgroundColor='#DCDCDC' cardElevation="0dp" layout_weight="1" marginLeft="5dp" >
-                                                    <frame w="*" h="*" >
-                                                        <text w="auto" h="auto" textSize="15sp" textColor="#000000"
-                                                            id='私信记录' text="私信:null" layout_gravity='center' gravity='center' />
-                                                    </frame>
-                                                </card>
-                                                <card w="auto" h="*" cardCornerRadius="5dp"
-                                                    cardBackgroundColor='#DCDCDC' cardElevation="0dp" layout_weight="1" marginLeft="5dp" >
-                                                    <frame w="*" h="*" >
-                                                        <text w="auto" h="auto" textSize="15sp" textColor="#000000"
-                                                            id='拨打记录' text="拨打:null" layout_gravity='center' gravity='center' />
-                                                    </frame>
-                                                </card>
-                                                <card w="auto" h="*" cardCornerRadius="5dp"
-                                                    marginLeft="5dp" cardBackgroundColor='#1E90FF' cardElevation="0dp"  >
-                                                    <frame id='清除记录' w="*" h="*" padding="10dp 0dp">
-                                                        <text w="auto" h="auto" textSize="15sp" textColor="#FFFFFF" text="清除"
-                                                            layout_gravity='center_vertical' />
-                                                    </frame>
-                                                </card>
-                                            </horizontal>
-                                        </vertical>
-                                    </brdcr-layout>
-
-                                    <list id="操作记录list" w='*' h='auto'>
-                                        <card w="*" h="auto" cardCornerRadius="5dp"
-                                            cardBackgroundColor='#FFFFFF' cardElevation="0dp" margin="5dp 5dp 5dp 0dp">
-                                            <vertical padding="10dp 10dp">
-                                                <horizontal h='auto' gravity="center_vertical" layout_weight="1">
-                                                    <text text="phone:{{this.phone}}" textSize="15sp" textColor="#333333" w='auto' h="auto" ellipsize="end" maxLines='1' />
-                                                    <text text="{{this.time}}" textColor="#0099ff" textSize="12" layout_weight="1" marginLeft="10dp"></text>
-                                                </horizontal>
-                                                <horizontal h='auto' gravity="center_vertical" layout_weight="1">
-                                                    <text text="添加:{{this.添加}}" textSize="15sp" textColor="#333333" w='auto' h="auto" ellipsize="end" maxLines='1' layout_weight="1" />
-                                                    <text text="私信:{{this.私信}}" textSize="15sp" textColor="#333333" w='auto' h="auto" ellipsize="end" maxLines='1' layout_weight="1" />
-                                                    <text text="拨打:{{this.拨打}}" textSize="15sp" textColor="#333333" w='auto' h="auto" ellipsize="end" maxLines='1' layout_weight="1" />
-                                                </horizontal>
-                                            </vertical>
-                                        </card>
-                                    </list>
-
-                                </vertical>
-                            </scroll >
+                            </frame >
 
                         </viewpager>
 
@@ -996,7 +856,7 @@ function 首页ui() {
                                             cardElevation="0dp"
                                             marginTop="12dp">
                                             <vertical id="充值按钮" w="*" h="*" gravity="center">
-                                                <text text="立即充值" textColor="#FFFFFF" textSize="15sp" textStyle="bold" />
+                                                <text w="*" gravity="center" paddingLeft="8dp" text="立即充值" textColor="#FFFFFF" textSize="15sp" textStyle="bold" />
                                             </vertical>
                                         </card>
                                     </vertical>
@@ -1039,6 +899,16 @@ function 首页ui() {
                                 </card>
                                 <card w="*" h="auto" cardCornerRadius="10dp"
                                     marginTop="5dp" cardBackgroundColor='#F1F9FA' cardElevation="0dp"  >
+                                    <frame w="*" h="auto" id='退出登录' padding="15dp 22dp">
+                                        <horizontal w="auto" h="auto" layout_gravity="left|center_vertical" gravity="center_vertical">
+                                            <img w="28dp" h="28dp" src="ic_lock_outline_black_48dp" scaleType="fitEnd" />
+                                            <text w="auto" h="auto" textSize="16sp" textColor="#333333" text="退出登录" marginLeft="11dp" />
+                                        </horizontal>
+                                        <img w="25dp" h="25dp" src="ic_keyboard_arrow_right_black_48dp" layout_gravity="right|center_vertical" scaleType="fitEnd" tint="#D3D3D3" />
+                                    </frame>
+                                </card>
+                                <card w="*" h="auto" cardCornerRadius="10dp"
+                                    marginTop="5dp" cardBackgroundColor='#F1F9FA' cardElevation="0dp"  >
                                     <frame w="*" h="auto" id='退出' padding="15dp 22dp">
                                         <horizontal w="auto" h="auto" layout_gravity="left|center_vertical" gravity="center_vertical">
                                             <img w="28dp" h="28dp" src="ic_exit_to_app_black_48dp" scaleType="fitEnd" />
@@ -1067,9 +937,9 @@ function 首页ui() {
         </frame >
     );
 
-    ui.viewpager.setTitles(["运行设置", "操作记录"]);
+    ui.viewpager.setTitles(["运行设置", "使用教程"]);
     ui.tabs.setupWithViewPager(ui.viewpager);
-    ui.操作记录list.setDataSource(控件信息.操作记录list || []);
+    ui.操作记录list && ui.操作记录list.setDataSource(控件信息.操作记录list || []);
     ui.充值按钮 && ui.充值按钮.on("click", function () {
         threads.start(function () {
             打开充值弹窗();
@@ -1137,7 +1007,7 @@ function 首页ui() {
         同步首页状态();
     });
 
-    ui.清除记录.on("click", function () {
+    ui.清除记录 && ui.清除记录.on("click", function () {
         控件信息.操作记录list = [];
         刷新操作记录统计();
         toastLog("清除成功");
@@ -1175,6 +1045,7 @@ function 首页ui() {
     // });
     // ui.platForms.setEnabled(isFirstEnter);
 
+    ui.退出登录 && ui.退出登录.click(() => { 退出登录(); });
     ui.退出.click(() => { engines.stopAll(); });
 
     ui.查看日志.on("click", () => { app.startActivity("console"); });
