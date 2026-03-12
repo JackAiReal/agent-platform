@@ -33,7 +33,7 @@ const TASK_CONFIG = {
 
 const FETCH_API_CONFIG = {
     baseUrl: "http://43.139.72.34:81",
-    paths: ["/fetch/by-table", "/v1/fetch/by-table"],
+    paths: ["/fetch/by-table", "/v1/fetch/by-table", "/api/fetch/by-table", "/api/v1/fetch/by-table"],
     // 若后端配置了独立的 FETCH_SIGN_SECRET，请改成对应密钥；未单独配置时可先复用 appSecret。
     secret: MEMBERSHIP_CONFIG.appSecret,
     ttlSeconds: 300
@@ -2875,8 +2875,8 @@ function 生成取数签名(key, withIn, ts) {
         for (let i = 0; i < bytes.length; i++) {
             let b = bytes[i];
             if (b < 0) b += 256;
-            let hex = java.lang.Integer.toHexString(b);
-            if (hex.length() == 1) sb.append("0");
+            let hex = String(java.lang.Integer.toHexString(b));
+            if (hex.length == 1) sb.append("0");
             sb.append(hex);
         }
         let sign = String(sb.toString());
@@ -3116,6 +3116,11 @@ function getIds() {
         }
     }
 
+    记录自动化日志("fetch.byTable.allRoutesFailed", {
+        baseUrl: FETCH_API_CONFIG.baseUrl,
+        paths: candidatePaths,
+        lastErrorMsg: lastErrorMsg
+    }, "ERROR")
     return {
         "code": -1,
         "msg": lastErrorMsg || "网络异常",
