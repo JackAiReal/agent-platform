@@ -1,0 +1,4442 @@
+// ==================== 启动与全局配置 ====================
+
+'ui';
+javaClass(); public(); UI_layout_module(); foundation();
+ui.statusBarColor("#ff0033");
+
+var 脚本名称 = '全平台全自动写作业';
+const 当前版本号 = '2.0.5';
+const 悬浮窗启动方式 = 0;
+const 顶部打印日志开关 = false; // 会员/接口诊断日志：true=显示并启用，false=隐藏并禁用
+const 顶部自动化日志开关 = true; // 自动化脚本逻辑日志：true=显示并启用，false=隐藏并禁用
+const 顶部自动化日志默认开启 = true;
+
+const MEMBERSHIP_CONFIG = {
+    apiBase: "https://membership.8188811.xyz/api",
+    shareUrl: "https://membership.8188811.xyz/share/VoBJgMG8j7Qiog1jh3uRIhi7aCgkAFfZ",
+    appCode: "IdBotAuto",
+    appName: "ID写作业",
+    appSecret: "01xL99-xolszV5T_51eEjbkdxOb0PI8VWU0FvhZU6gw",
+    rechargeToken: "lf49OcwFe0hEfCCPVQD96fYlOUuBdATs"
+};
+
+const TASK_CONFIG = {
+    baseUrl: "https://api.8188811.xyz",
+    codeType: "AllIdTask",
+    defaultIdType: "page_data_9",
+    defaultPackage: "com.jiuyin.mc",
+    defaultVersion: "1.6.51",
+    defaultIdPrefix: "com.jiuyin.mc:id/",
+    withinSeconds: 24 * 3600,
+    defaultPageSize: 100,
+    maxImages: 5
+};
+
+const FETCH_API_CONFIG = {
+    baseUrl: "http://43.139.72.34:81",
+    paths: ["/fetch/by-table", "/v1/fetch/by-table", "/api/fetch/by-table", "/api/v1/fetch/by-table"],
+    // 若后端配置了独立的 FETCH_SIGN_SECRET，请改成对应密钥；未单独配置时可先复用 appSecret。
+    secret: "1f104ea3c044859daf5859398137cfad44fa4838a65ea14f29a0e85aad33009f",
+    ttlSeconds: 300
+};
+
+/* 获取屏幕信息 */
+const resources = context.getResources();
+let 屏幕信息 = resources.getDisplayMetrics();
+const 设备高度 = Math.floor((device.height || 屏幕信息.heightPixels || 1920) / 10) * 10;
+const 设备宽度 = Math.floor((device.width || 屏幕信息.widthPixels || 1080) / 10) * 10;
+const toast监控 = { 是否开启: false, toast内容: null };
+var height = device.height
+var width = device.width
+
+var memberApiBase = MEMBERSHIP_CONFIG.apiBase;
+var membershipWebBase = memberApiBase.replace(/\/api\/?$/, "");
+var membershipShareUrl = MEMBERSHIP_CONFIG.shareUrl;
+var membershipAppCode = MEMBERSHIP_CONFIG.appCode;
+var membershipAppName = MEMBERSHIP_CONFIG.appName;
+var membershipAppSecret = MEMBERSHIP_CONFIG.appSecret;
+var membershipRechargeToken = MEMBERSHIP_CONFIG.rechargeToken;
+
+var baseUrl = TASK_CONFIG.baseUrl
+var codeType = TASK_CONFIG.codeType
+var idType = TASK_CONFIG.defaultIdType
+var apkPackage = TASK_CONFIG.defaultPackage
+var appVersion = TASK_CONFIG.defaultVersion
+var fullIdPre = TASK_CONFIG.defaultIdPrefix
+var androidId = device.getAndroidId()
+var within = TASK_CONFIG.withinSeconds
+var actionSpeed = 800
+var maxImages = TASK_CONFIG.maxImages
+var isCheckedLocal = false
+
+var storage = storages.create("auto" + 脚本名称);
+var dateStorage = storages.create(getCurrentDate() + 脚本名称);
+
+var cache = storageNullCreate(dateStorage, "cache", [])
+var page = storageNullCreate(dateStorage, "page", 1)
+var page_size = storageNullCreate(dateStorage, "page_size", TASK_CONFIG.defaultPageSize)
+var long_cache = storageNullCreate(storage, "long_cache", [])
+
+var 控件信息 = storage.get("控件存储") || {};
+初始化控件信息();
+
+var aimStr = "蓝伴语音|咪鸭|哆咪|cucu|喜马拉雅|梦音|花椒|捞月狗|双鱼|伴糖|多多|kook|PP|不夜|不二开黑|keke|gugu|咕咕|atat|双鱼|cucu|uki|小陪伴|Dino|更多App兼容中..."
+var aimNum = aimStr.split("|").length
+
+var uiStorage = storages.create("ui");
+var platForms = storageNullCreateui(uiStorage, "platForms", aimStr)
+
+// ==================== 运行时状态 ====================
+
+var 主程序线程 = threads.start(function () { });
+var 悬浮窗线程 = threads.start(function () { });
+var RrstartStatus = "初始化"
+var checkThreads = null
+let 更新公告 = "V" + 当前版本号 + "更新: 1.添加自动重启修复，无惧自动退出"
+let 滚动公告 = '本软件仅供学习和研究使用。其旨在为技术交流讨论提供参考和资料，任何其他目的均不适用，如若违反相关条例法律, 一切后果由使用者承担, 继续使用代表您同意本条款!。本免责声明的最终解释权归声明者所有。';
+
+events.on("exit", function () {
+    保存控件信息();
+});
+
+// ==================== 状态与通用工具 ====================
+
+function storageNullCreateui(appStorage, key, defaultValue) {
+    let currentValue = appStorage.get(key);
+    if ((currentValue + '') === "undefined" || !currentValue) {
+        appStorage.put(key, defaultValue)
+        return defaultValue
+    }
+    if (currentValue.length !== aimStr.length || currentValue.split("|").length != aimNum) {
+        appStorage.put(key, aimStr)
+        return aimStr
+    }
+    console.log(currentValue)
+    return currentValue
+}
+
+function 初始化控件信息() {
+    控件信息.操作记录list = 控件信息.操作记录list || [];
+    控件信息.已获取number = 控件信息.已获取number || 0;
+    控件信息.token = 控件信息.token || "";
+    控件信息.refresh_token = 控件信息.refresh_token || "";
+    控件信息.userInfo = 控件信息.userInfo || null;
+    控件信息.entitlements = 控件信息.entitlements || [];
+    控件信息.memberLevel = 控件信息.memberLevel || "普通会员";
+    控件信息.memberStatus = 控件信息.memberStatus || "normal";
+    控件信息.memberExpireAt = 控件信息.memberExpireAt || "无";
+    控件信息.memberAvailable = 控件信息.memberAvailable === true;
+    控件信息.loginCaptchaEnabled = 控件信息.loginCaptchaEnabled === true;
+    if (控件信息.自动化日志初始化标记 !== true) {
+        控件信息.打印日志 = 顶部自动化日志默认开启;
+        控件信息.自动化日志初始化标记 = true;
+    }
+    控件信息.打印日志 = 顶部自动化日志开关 ? (控件信息.打印日志 === true) : false;
+    控件信息.账号 = 控件信息.账号 || "";
+    控件信息.密码 = 控件信息.密码 || "";
+}
+
+function 保存控件信息() {
+    storage.put("控件存储", 控件信息);
+}
+
+function storageNullCreate(appStorage, key, defaultValue) {
+    if ((appStorage.get(key) + '') === "undefined") {
+        appStorage.put(key, defaultValue)
+        return defaultValue
+    } else {
+        return appStorage.get(key)
+    }
+}
+
+function 会员日志功能可用() {
+    return 顶部打印日志开关 === true;
+}
+
+function 日志功能可用() {
+    return 顶部自动化日志开关 === true;
+}
+
+function 日志输出已开启() {
+    return 日志功能可用() && 控件信息 && 控件信息.打印日志 === true;
+}
+
+function 构建日志文本(scope, level, tag, payload) {
+    let text = "[" + scope + "][" + level + "]";
+    if (tag) {
+        text += "[" + tag + "]";
+    }
+    text += " ";
+    if (typeof payload == "string") {
+        text += payload;
+    } else {
+        try {
+            text += JSON.stringify(payload);
+        } catch (e) {
+            text += String(payload);
+        }
+    }
+    return text;
+}
+
+function 输出控制台日志(level, text) {
+    if (level == "ERROR") {
+        console.error(text);
+    } else if (level == "WARN") {
+        console.warn(text);
+    } else if (level == "DEBUG") {
+        console.verbose(text);
+    } else {
+        console.log(text);
+    }
+}
+
+function 记录关键日志(tag, payload, level) {
+    if (!会员日志功能可用()) return;
+    level = level || "INFO";
+    let text = 构建日志文本("Membership", level, tag, payload);
+    输出控制台日志(level, text);
+}
+
+function 记录自动化日志(tag, payload, level) {
+    if (!日志功能可用()) return;
+    level = level || "INFO";
+    let text = 构建日志文本("Automation", level, tag, payload);
+    if (日志输出已开启()) {
+        日志({ 文本: text, level: level, 已格式化: true, 仅界面: false });
+    } else {
+        输出控制台日志(level, text);
+    }
+}
+
+function 格式化时间显示(value) {
+    let ts = 解析会员时间(value);
+    if (!ts) return value || "无";
+    let d = new Date(ts);
+    function pad(n) { return String(n).padStart(2, '0'); }
+    return d.getFullYear() + "年" + pad(d.getMonth() + 1) + "月" + pad(d.getDate()) + "日 " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+}
+
+function 规范化匹配值(value) {
+    return String(value || "").replace(/\s+/g, "").toLowerCase();
+}
+
+function 重置会员信息() {
+    控件信息.memberLevel = "普通会员";
+    控件信息.memberStatus = "normal";
+    控件信息.memberExpireAt = "无";
+}
+
+function 解析会员时间(value) {
+    if (!value || value == "无") return null;
+    let ts = new Date(value).getTime();
+    if (!isNaN(ts)) return ts;
+
+    let str = String(value).trim();
+    let match = str.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/);
+    if (match) {
+        let year = parseInt(match[1]);
+        let month = parseInt(match[2]) - 1;
+        let day = parseInt(match[3]);
+        let hour = parseInt(match[4]);
+        let minute = parseInt(match[5]);
+        let second = parseInt(match[6]);
+        let millisecond = parseInt(((match[7] || "") + "000").slice(0, 3) || "0");
+        return new Date(year, month, day, hour, minute, second, millisecond).getTime();
+    }
+
+    match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+        return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]), 0, 0, 0, 0).getTime();
+    }
+    return null;
+}
+
+function 获取当前App权益(entitlements) {
+    entitlements = entitlements || [];
+    let targetCode = 规范化匹配值(membershipAppCode);
+    let targetName = 规范化匹配值(membershipAppName);
+
+    for (let i = 0; i < entitlements.length; i++) {
+        let item = entitlements[i] || {};
+        if (规范化匹配值(item.app_code) == targetCode) {
+            return item;
+        }
+    }
+
+    for (let i = 0; i < entitlements.length; i++) {
+        let item = entitlements[i] || {};
+        if (规范化匹配值(item.app_name) == targetName) {
+            return item;
+        }
+    }
+
+    return null;
+}
+
+function 当前权益对象可用(entitlement) {
+    if (!entitlement) return false;
+    if (String(entitlement.status || "").toLowerCase() != "active") return false;
+    if (!entitlement.expire_at) return true;
+    let expireTs = 解析会员时间(entitlement.expire_at);
+    if (!expireTs) return false;
+    return expireTs > new Date().getTime();
+}
+
+function 当前App会员可用() {
+    return 当前权益对象可用(获取当前App权益(控件信息.entitlements || []));
+}
+
+function 同步当前App会员信息(entitlements) {
+    entitlements = entitlements || [];
+    控件信息.entitlements = entitlements;
+    控件信息.memberAvailable = false;
+    重置会员信息();
+
+    记录关键日志("entitlements.raw", entitlements);
+    let currentEnt = 获取当前App权益(entitlements);
+    记录关键日志("entitlements.match", currentEnt || "未匹配到当前 App 权益");
+
+    if (!currentEnt) {
+        控件信息.memberLevel = "未开通";
+        控件信息.memberStatus = "inactive";
+        控件信息.memberExpireAt = "无";
+        return;
+    }
+
+    控件信息.memberStatus = currentEnt.status || "normal";
+    控件信息.memberExpireAt = 格式化时间显示(currentEnt.expire_at || "无");
+
+    if (当前权益对象可用(currentEnt)) {
+        控件信息.memberAvailable = true;
+        控件信息.memberLevel = currentEnt.plan_name || currentEnt.plan_title || currentEnt.level_name || currentEnt.level || "会员";
+        记录关键日志("entitlements.available", {
+            memberLevel: 控件信息.memberLevel,
+            memberStatus: 控件信息.memberStatus,
+            expireAt: 控件信息.memberExpireAt
+        });
+        return;
+    }
+
+    if (currentEnt.expire_at && 解析会员时间(currentEnt.expire_at) && 解析会员时间(currentEnt.expire_at) <= new Date().getTime()) {
+        控件信息.memberLevel = "已过期";
+        控件信息.memberStatus = "expired";
+    } else {
+        控件信息.memberLevel = "未开通";
+    }
+
+    记录关键日志("entitlements.unavailable", {
+        memberLevel: 控件信息.memberLevel,
+        memberStatus: 控件信息.memberStatus,
+        expireAt: 控件信息.memberExpireAt
+    });
+}
+
+// ==================== 页面渲染与弹窗 UI ====================
+
+function 获取使用教程文本() {
+    return [
+        "使用教程",
+        "",
+        "1. 请先登录账号，确认个人信息页面中的会员类型与到期时间显示正常。",
+        "2. 进入运行设置页面后，根据实际需求选择平台、功能、话术库与本地ID库。",
+        "3. 使用前请确保无障碍权限与悬浮窗权限均已开启。",
+        "4. 参数确认无误后，点击底部运行按钮开始任务。",
+        "5. 如提示会员未开通或已过期，请点击“立即充值”，完成支付后关闭充值页面并刷新会员信息。",
+        "6. 若会员信息未及时更新，请重新进入个人信息页面查看最新状态。",
+        "7. 如有疑问，请联系售后人员处理。"
+    ].join("\n");
+}
+
+function 配置内嵌网页(webView, 页面名称) {
+    let ws = webView.getSettings();
+    ws.setJavaScriptEnabled(true);
+    ws.setDomStorageEnabled(true);
+    ws.setUseWideViewPort(true);
+    ws.setLoadWithOverviewMode(true);
+    ws.setSupportZoom(false);
+    ws.setBuiltInZoomControls(false);
+    ws.setDisplayZoomControls(false);
+    ws.setAllowFileAccess(true);
+    ws.setDatabaseEnabled(true);
+    ws.setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);
+
+    webView.setWebViewClient(new JavaAdapter(android.webkit.WebViewClient, {
+        onPageFinished: function (view, url) {
+            log(页面名称 + "加载完成: " + url);
+        },
+        shouldOverrideUrlLoading: function (view, url) {
+            view.loadUrl(url);
+            return true;
+        }
+    }));
+}
+
+function 刷新日志入口状态() {
+    if (ui.日志卡片) {
+        ui.日志卡片.attr("visibility", 日志功能可用() ? "visible" : "gone");
+    }
+    if (ui.查看日志) {
+        ui.查看日志.attr("visibility", 日志输出已开启() ? "visible" : "gone");
+    }
+}
+
+function 刷新操作记录统计() {
+    if (!ui.操作记录list) return;
+    ui.操作记录list.setDataSource(控件信息.操作记录list || []);
+
+    let 添加数据 = 控件信息.操作记录list.filter((Value2) => Value2.添加);
+    let 私信数据 = 控件信息.操作记录list.filter((Value2) => Value2.私信);
+    let 拨打数据 = 控件信息.操作记录list.filter((Value2) => Value2.拨打);
+
+    ui.私信记录 && ui.私信记录.setText("私信:" + String(私信数据.length));
+    ui.添加记录 && ui.添加记录.setText("添加:" + String(添加数据.length));
+    ui.拨打记录 && ui.拨打记录.setText("拨打:" + String(拨打数据.length));
+}
+
+function 同步首页状态() {
+    ui.无障碍 && (ui.无障碍.checked = auto.service != null);
+    ui.悬浮窗 && (ui.悬浮窗.checked = floaty.checkPermission() != false);
+    ui.打印日志 && (ui.打印日志.checked = 日志输出已开启());
+    刷新日志入口状态();
+    刷新我的页面();
+    刷新操作记录统计();
+}
+
+function 渲染验证码到网页(webView, imageBase64) {
+    let html = '<html><body style="margin:0;background:#ffffff;display:flex;align-items:center;justify-content:center;">'
+        + '<img style="max-width:100%;height:auto;" src="' + imageBase64 + '" />'
+        + '</body></html>';
+    webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
+}
+
+function 加载使用教程页面() {
+    if (ui.使用教程文本) {
+        ui.使用教程文本.setText(获取使用教程文本());
+    }
+}
+
+function 登录ui() {
+    ui.layout(
+        <frame id="bg">
+            <ScrollView w="*" h="*">
+                <vertical
+                    id="root"
+                    w="*"
+                    h="auto"
+                    padding="0 28dp 0 24dp">
+
+                    <text
+                        textSize="34sp"
+                        textColor="#FFFFFF"
+                        text="{{脚本名称}}{{当前版本号}}"
+                        h="auto"
+                        w="*"
+                        gravity="center"
+                        letterSpacing="0.05"
+                        textStyle="bold"
+                        marginTop="18dp" />
+
+                    <horizontal gravity="center_vertical" marginTop="12dp" w="*">
+                        <img w="24dp" h="24dp" src="ic_notifications_none_black_48dp"
+                             scaleType="fitEnd" layout_gravity="center"
+                             tint="#A0FFFFFF" marginLeft="6dp" />
+                        <TextView
+                            id="tv_text"
+                            singleLine="true"
+                            ellipsize="marquee"
+                            focusable="true"
+                            text="{{滚动公告}}"
+                            textColor="#A0FFFFFF"
+                            textSize="14sp"
+                            marginLeft="6dp" />
+                    </horizontal>
+
+                    <horizontal gravity="center_vertical" marginTop="8dp" w="*">
+                        <img w="24dp" h="24dp" src="ic_notifications_none_black_48dp"
+                             scaleType="fitEnd" layout_gravity="center"
+                             tint="#A0FFFFFF" marginLeft="6dp" />
+                        <TextView
+                            id="tv_text2"
+                            singleLine="true"
+                            ellipsize="marquee"
+                            focusable="true"
+                            text="{{更新公告}}"
+                            textColor="#A0FFFFFF"
+                            textSize="14sp"
+                            marginLeft="6dp" />
+                    </horizontal>
+
+                    <vertical
+                        w="*"
+                        h="auto"
+                        marginTop="20dp">
+
+                        <card
+                            w="*"
+                            h="56dp"
+                            cardCornerRadius="10dp"
+                            cardBackgroundColor="#F1F9FA"
+                            cardElevation="0dp"
+                            margin="2dp 0 2dp 0">
+                            <horizontal w="*" h="*" gravity="center_vertical" padding="10dp 0">
+                                <img w="26dp" h="26dp" src="ic_perm_identity_black_48dp"
+                                     tint="#000000" marginLeft="14dp" />
+                                <input
+                                    id="账号"
+                                    singleLine="true"
+                                    bg="#F1F9FA"
+                                    text="{{控件信息.账号||''}}"
+                                    w="*"
+                                    h="auto"
+                                    textColor="#333333"
+                                    hint="请输入邮箱或用户名"
+                                    textSize="18sp"
+                                    textColorHint="#999999"
+                                    marginLeft="10dp"
+                                    marginRight="14dp" />
+                            </horizontal>
+                        </card>
+
+                        <card
+                            w="*"
+                            h="56dp"
+                            cardCornerRadius="10dp"
+                            cardBackgroundColor="#F1F9FA"
+                            cardElevation="0dp"
+                            margin="2dp 16dp 2dp 0">
+                            <horizontal w="*" h="*" gravity="center_vertical" padding="10dp 0">
+                                <img w="26dp" h="26dp" src="ic_lock_outline_black_48dp"
+                                     tint="#000000" marginLeft="14dp" />
+                                <input
+                                    id="密码"
+                                    singleLine="true"
+                                    password="true"
+                                    bg="#F1F9FA"
+                                    text="{{控件信息.密码||''}}"
+                                    w="*"
+                                    h="auto"
+                                    textColor="#333333"
+                                    hint="请输入密码"
+                                    textSize="18sp"
+                                    textColorHint="#999999"
+                                    marginLeft="10dp"
+                                    marginRight="14dp" />
+                            </horizontal>
+                        </card>
+
+                        <card
+                            w="*"
+                            h="52dp"
+                            cardCornerRadius="26dp"
+                            cardBackgroundColor="#26b3c6"
+                            cardElevation="0dp"
+                            margin="30dp 28dp 30dp 0dp">
+                            <vertical h="*" gravity="center" id="登录">
+                                <text textSize="20sp" textColor="#FFFFFF" text="登录"
+                                      h="auto" w="auto" letterSpacing="0.3" textStyle="bold" />
+                            </vertical>
+                        </card>
+
+                        <card
+                            w="*"
+                            h="52dp"
+                            cardCornerRadius="26dp"
+                            cardBackgroundColor="#FFFFFF"
+                            cardElevation="0dp"
+                            margin="30dp 28dp 30dp 0dp">
+                            <vertical h="*" gravity="center" id="注册">
+                                <text textSize="20sp" textColor="#26b3c6" text="注册"
+                                      h="auto" w="auto" letterSpacing="0.3" textStyle="bold" />
+                            </vertical>
+                        </card>
+                    </vertical>
+
+                    <vertical h="auto" w="*" gravity="center" marginTop="18dp" marginBottom="20dp">
+                        <text textSize="13sp" textColor="#ECEFF1"
+                              text="登录即代表您阅读并同意服务协议" h="auto" w="auto" />
+                    </vertical>
+                </vertical>
+            </ScrollView>
+        </frame>
+    );
+
+    ui.tv_text.setSelected(true);
+    ui.tv_text2.setSelected(true);
+    ui.bg.backgroundDrawable = BgRGB("TL_BR", ["#ff0033", "#ff0033", "#FFF176", "#ff0033"]);
+
+    ui.登录.on("click", () => {
+        控件信息.账号 = String(ui.账号.getText()).trim();
+        控件信息.密码 = String(ui.密码.getText()).trim();
+        保存控件信息();
+        执行会员登录();
+    });
+
+    ui.注册.on("click", () => {
+        打开注册弹窗();
+    });
+}
+
+function 打开注册弹窗() {
+    if (!membershipShareUrl) {
+        toastLog("未配置分享注册链接，请先设置 MEMBERSHIP_CONFIG.shareUrl");
+        return;
+    }
+    ui.run(function () {
+        let registerView = ui.inflate(
+            <vertical bg="#FFFFFF">
+                <horizontal w="*" h="50dp" gravity="center_vertical" bg="#26b3c6" padding="12dp 0">
+                    <text text="会员注册" textColor="#FFFFFF" textSize="18sp" textStyle="bold" marginLeft="16dp" layout_weight="1" />
+                    <text id="关闭注册页" text="关闭" textColor="#FFFFFF" textSize="16sp" marginRight="16dp" />
+                </horizontal>
+                <webview id="注册网页" w="*" h="520dp" />
+                <horizontal w="*" gravity="center" padding="12dp">
+                    <card w="140dp" h="44dp" cardCornerRadius="22dp" cardBackgroundColor="#26b3c6" cardElevation="0dp">
+                        <vertical id="完成注册返回" w="*" h="*" gravity="center">
+                            <text text="注册完成，返回登录" textColor="#FFFFFF" textSize="14sp" />
+                        </vertical>
+                    </card>
+                </horizontal>
+            </vertical>,
+            null,
+            false
+        );
+
+        let dialog = dialogs.build({
+            customView: registerView,
+            wrapInScrollView: false,
+            autoDismiss: false
+        }).show();
+
+        let webView = registerView.注册网页;
+
+        ui.run(function () {
+            配置内嵌网页(webView, "注册页");
+            webView.loadUrl(membershipShareUrl);
+        });
+
+        registerView.关闭注册页.on("click", function () {
+            dialog.dismiss();
+        });
+
+        registerView.完成注册返回.on("click", function () {
+            dialog.dismiss();
+            toastLog("已返回登录页，请输入刚注册的账号密码登录");
+        });
+    });
+}
+
+function 显示登录验证码弹窗(emailOrUsername, password) {
+    let captchaData = 获取图形验证码();
+    if (!captchaData) return;
+
+    ui.run(function () {
+        let currentCaptcha = captchaData;
+        let captchaView = ui.inflate(
+            <vertical bg="#FFFFFF">
+                <horizontal w="*" h="50dp" gravity="center_vertical" bg="#26b3c6" padding="12dp 0">
+                    <text text="请输入验证码" textColor="#FFFFFF" textSize="18sp" textStyle="bold" marginLeft="16dp" layout_weight="1" />
+                    <text id="关闭验证码页" text="关闭" textColor="#FFFFFF" textSize="16sp" marginRight="16dp" />
+                </horizontal>
+                <webview id="验证码网页" w="*" h="120dp" />
+                <input id="验证码输入框" singleLine="true" hint="请输入图形验证码" textSize="18sp" margin="16dp 12dp" />
+                <horizontal w="*" gravity="center" padding="12dp">
+                    <card w="130dp" h="44dp" cardCornerRadius="22dp" cardBackgroundColor="#FFFFFF" cardElevation="0dp" marginRight="12dp">
+                        <vertical id="刷新验证码" w="*" h="*" gravity="center">
+                            <text text="刷新验证码" textColor="#26b3c6" textSize="15sp" textStyle="bold" />
+                        </vertical>
+                    </card>
+                    <card w="150dp" h="44dp" cardCornerRadius="22dp" cardBackgroundColor="#26b3c6" cardElevation="0dp">
+                        <vertical id="提交验证码登录" w="*" h="*" gravity="center">
+                            <text text="确认登录" textColor="#FFFFFF" textSize="15sp" textStyle="bold" />
+                        </vertical>
+                    </card>
+                </horizontal>
+            </vertical>,
+            null,
+            false
+        );
+
+        let dialog = dialogs.build({
+            customView: captchaView,
+            wrapInScrollView: false,
+            autoDismiss: false
+        }).show();
+
+        function refreshCaptchaView() {
+            渲染验证码到网页(captchaView.验证码网页, currentCaptcha.image_base64);
+        }
+
+        refreshCaptchaView();
+
+        captchaView.关闭验证码页.on("click", function () {
+            dialog.dismiss();
+        });
+
+        captchaView.刷新验证码.on("click", function () {
+            threads.start(function () {
+                let nextCaptcha = 获取图形验证码();
+                if (!nextCaptcha) return;
+                currentCaptcha = nextCaptcha;
+                ui.run(function () {
+                    captchaView.验证码输入框.setText("");
+                    refreshCaptchaView();
+                });
+            });
+        });
+
+        captchaView.提交验证码登录.on("click", function () {
+            let captchaCode = String(captchaView.验证码输入框.getText()).trim();
+            if (!captchaCode) {
+                toastLog("请输入验证码");
+                return;
+            }
+
+            threads.start(function () {
+                let ok = 后端登录(emailOrUsername, password, {
+                    captcha_id: currentCaptcha.captcha_id,
+                    captcha_code: captchaCode
+                });
+                if (ok) {
+                    ui.run(function () {
+                        dialog.dismiss();
+                        首页ui();
+                    });
+                }
+            });
+        });
+    });
+}
+
+function 刷新我的页面() {
+    ui.run(function () {
+        let username = "-";
+        let email = "-";
+        let level = 控件信息.memberLevel || "普通会员";
+        let expire = 格式化时间显示(控件信息.memberExpireAt || "无");
+
+        if (控件信息.userInfo) {
+            username = 控件信息.userInfo.username || 控件信息.userInfo.nickname || "-";
+            email = 控件信息.userInfo.email || "-";
+        }
+
+        if (ui.userNameUI) {
+            ui.userNameUI.setText("用户名: " + username);
+        }
+        if (ui.userEmailUI) {
+            ui.userEmailUI.setText("邮箱: " + email);
+        }
+        if (ui.memberLevelUI) {
+            ui.memberLevelUI.setText("会员类型: " + level);
+        }
+        if (ui.memberExpireUI) {
+            ui.memberExpireUI.setText("到期时间: " + expire);
+        }
+    });
+}
+
+function 首页ui() {
+    ui.layout(
+        <frame>
+            <relative >
+                <viewpager id='vp' layout_below='appbar' layout_above='bnv' bg='#FFFFFF'   >
+                    <vertical w='*' h='*' >
+                        <appbar id="ni" w="*" h="auto" bg='#ff0033' >
+                            <vertical w='*' h='90dp'  >
+                                <toolbar id="toolbar" textStyle="bold" title="{{脚本名称}}" textSize="15sp" textColor="#ffffff" h='40dp' w='auto' />
+                                <tabs id='tabs' w='*' tabIndicatorColor="#ffffff" tabIndecatorHeight="5dp" />
+                            </vertical >
+                        </appbar>
+                        <viewpager id="viewpager" isScrollContainer="false">
+
+                            <scroll   >
+                                <vertical gravity="center_vertical" padding='10'>
+
+                                    <brdcr-layout foid='false' w='*'   >
+                                        <vertical gravity="center_vertical" padding='10'>
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <text text="平台: " />
+                                                <spinner id="platForms" entries="{{platForms}}" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                            </horizontal>
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <text textSize="15sp">功能选择：</text>
+                                                <checkbox visibility="gone" id="添加用户_box" checked="{{控件信息.添加用户_box}}" text='添加' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <checkbox id="私信用户_box" checked="{{控件信息.私信用户_box}}" text='私信' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <checkbox visibility="gone" id="拨打语音_box" checked="{{控件信息.拨打语音_box}}" text='拨打' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <checkbox id="发送图片_box" checked="{{控件信息.发送图片_box}}" text='发图' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                            </horizontal>
+
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <text textSize="15sp">优化功能：</text>
+                                                <checkbox id="重复不写_box" checked="{{控件信息.重复不写_box}}" text='重复不写' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                            </horizontal>
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <text textSize="15sp">性别选择：</text>
+                                                <checkbox id="写男_box" checked="{{控件信息.写男_box}}" text='男' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <checkbox id="写女_box" checked="{{控件信息.写女_box}}" text='女' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                            </horizontal>
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <text textSize="15sp">过滤模特：</text>
+                                                <checkbox id="过滤男模_box" checked="{{控件信息.过滤男模_box}}" text='过滤男模' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <checkbox id="过滤女模_box" checked="{{控件信息.过滤女模_box}}" text='过滤女模' w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                            </horizontal>
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='auto' gravity='center_vertical' >
+                                                <checkbox id="消费范围_box" checked="{{控件信息.消费范围_box}}" text="消费范围：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <input-layout layout_weight="1" h='25dp' id="消费最低" text="{{控件信息.消费最低||'1'}}"></input-layout>
+                                                <text textSize="15sp">~</text>
+                                                <input-layout layout_weight="1" h='25dp' id="消费最高" text="{{控件信息.消费最高||'999999'}}"></input-layout>
+                                            </horizontal  >
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='auto' gravity='center_vertical' >
+                                                <text text='操作阈值：' w="auto" h="auto" textSize="15sp" ></text>
+                                                <input-layout layout_weight="1" h='25dp' id="操作阈值" text="{{控件信息.操作阈值||'999'}}"></input-layout>
+                                                <text textSize="15sp">条数据后停止运行</text>
+                                            </horizontal  >
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal visibility="gone" w='*' h='auto' gravity='center_vertical' >
+                                                <text text='拨打停留：' w="auto" h="auto" textSize="15sp" ></text>
+                                                <input-layout id="拨打停留小" style="number" text="{{控件信息.拨打停留小||'5'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">秒 至</text>
+                                                <input-layout id="拨打停留大" style="number" text="{{控件信息.拨打停留大||'10'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">秒</text>
+                                            </horizontal  >
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <checkbox id="操作延迟_box" checked="{{控件信息.操作延迟_box}}" text="操作延迟：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <input-layout id="操作延迟小" style="number" text="{{控件信息.操作延迟小||'500'}}" hint="毫秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">毫秒 至</text>
+                                                <input-layout id="操作延迟大" style="number" text="{{控件信息.操作延迟大||'1500'}}" hint="毫秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">毫秒</text>
+                                            </horizontal>
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal visibility="gone" w='*' h='auto' gravity='center_vertical' >
+                                                <text text='号码数据：' w="auto" h="auto" textSize="15sp" ></text>
+                                                <input-layout layout_weight="1" h='25dp' id="号码数据path" text="{{控件信息.号码数据path||'/sdcard/Pictures/号码数据.txt'}}"></input-layout>
+                                                <card w="auto" h="*" cardCornerRadius="2dp"
+                                                    cardBackgroundColor='#03A9F4' cardElevation="0dp" id='选择号码数据path' marginLeft='5dp'>
+                                                    <horizontal w="*" h="*" padding="5dp 0dp">
+                                                        <text w="auto" h="auto" textSize="15sp" textColor="#ffffff" text="选择"
+                                                            layout_gravity='center_vertical' />
+                                                    </horizontal>
+                                                </card>
+                                            </horizontal  >
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <checkbox id="图片位置_box" checked="{{控件信息.图片位置_box}}" text="图片位置：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <input-layout id="图片位置" text="{{控件信息.图片位置||'1,2'}}" hint="位置 英文逗号分开(整数型)" h='*' layout_weight="1"></input-layout>
+                                            </horizontal>
+
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <checkbox id="任务间隔_box" checked="{{控件信息.任务间隔_box}}" text="任务间隔：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <input-layout id="任务间隔小" style="number" text="{{控件信息.任务间隔小||'2'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">秒 至</text>
+                                                <input-layout id="任务间隔大" style="number" text="{{控件信息.任务间隔大||'5'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp">秒</text>
+                                            </horizontal>
+                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
+                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                                <checkbox id="搜索坐标_box" checked="{{控件信息.搜索坐标_box}}" text="(模拟器不勾)X{{width}}：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <input-layout id="搜索位置X" style="number" text="{{控件信息.搜索位置X||parseInt(width * 0.96)}}" hint="" h='*' layout_weight="1"></input-layout>
+                                                <text text="Y{{height}}" textSize="15sp"></text>
+                                                <input-layout id="搜索位置Y" style="number" text="{{控件信息.搜索位置Y||parseInt(height * 0.96)}}" hint="" h='*' layout_weight="1"></input-layout>
+                                                <text textSize="15sp"></text>
+                                            </horizontal>
+
+                                        </vertical>
+                                    </brdcr-layout>
+
+                                    <frame h='0' w='*' bg="#D4D4D4" margin="10 5" />
+                                    <ku-layout KuType="文字" Kuid="话术库list" KuName="话术库"  ></ku-layout>
+                                    <frame h='0' w='*' bg="#D4D4D4" margin="10 5" />
+                                    <ku-layout KuType="文字" Kuid="本地ID库list" KuName="本地ID库"  ></ku-layout>
+
+                                </vertical>
+                            </scroll >
+
+                            <scroll>
+                                <vertical w="*" h="*" padding="12dp 12dp 12dp 12dp">
+                                    <text text="使用教程" textSize="18sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
+                                    <text id="使用教程文本" text="" textSize="14sp" textColor="#444444" lineSpacingExtra="6dp" />
+                                </vertical>
+                            </scroll >
+
+                        </viewpager>
+
+                    </vertical >
+
+                    <frame >
+                        <scroll   >
+                            <vertical padding="13dp 50dp 15dp 30dp" >
+                                <horizontal w="*" h="auto" gravity="center_vertical" padding="12dp 10dp">
+                                    <img
+                                        id="头像"
+                                        w="72dp"
+                                        h="72dp"
+                                        src="@drawable/ic_account_circle_black_48dp"
+                                        scaleType="fitCenter"
+                                        circle="true" />
+
+                                    <vertical padding="15dp 2dp " w="*">
+                                        <text id="userNameUI" text="用户名: -" textSize="16sp" textColor="#333333" />
+                                        <text id="userEmailUI" text="邮箱: -" textSize="16sp" textColor="#333333" marginTop="6dp" />
+                                        <text id="memberLevelUI" text="会员类型: 普通会员" textSize="16sp" textColor="#333333" marginTop="6dp" />
+                                        <text id="memberExpireUI" text="到期时间: 无" textSize="16sp" textColor="#333333" marginTop="6dp" />
+
+                                        <card
+                                            w="120dp"
+                                            h="40dp"
+                                            cardCornerRadius="20dp"
+                                            cardBackgroundColor="#26b3c6"
+                                            cardElevation="0dp"
+                                            marginTop="12dp">
+                                            <vertical id="充值按钮" w="*" h="*" gravity="center">
+                                                <text w="*" gravity="center" paddingLeft="4dp" text="立即充值" textColor="#FFFFFF" textSize="15sp" textStyle="bold" />
+                                            </vertical>
+                                        </card>
+                                    </vertical>
+                                </horizontal>
+                                <card w="*" h="auto" cardCornerRadius="10dp"
+                                    marginTop="20dp" cardBackgroundColor='#F1F9FA' cardElevation="0dp" >
+                                    <vertical padding="15dp 22dp ">
+                                        <horizontal gravity="center_vertical"  >
+                                            <img w="28dp" h="28dp" src="ic_fingerprint_black_48dp" scaleType="fitEnd" />
+                                            <Switch id="无障碍" w="*" h="*" textSize="16sp" textColor="#333333" text="无障碍权限（必选）" checked="{{auto.service != null}}" marginLeft="11dp" />
+                                        </horizontal>
+                                        <frame w="*" h="1dp" bg='#EEEEEE' margin='0dp 15dp' />
+                                        <horizontal gravity="center_vertical" >
+                                            <img w="28dp" h="28dp" src="ic_extension_black_48dp" scaleType="fitEnd" />
+                                            <Switch id="悬浮窗" w="*" h="*" textSize="16sp" textColor="#333333" text="悬浮窗权限（必选）" checked="{{floaty.checkPermission() != false}}" marginLeft="11dp" />
+                                        </horizontal>
+                                        {/* <frame w="*" h="1dp" bg='#EEEEEE' margin='0dp 15dp' />
+                                        <horizontal gravity="center_vertical" >
+                                            <img w="28dp" h="28dp" src="ic_aspect_ratio_black_48dp" scaleType="fitEnd" />
+                                            <Switch id="截图" w="*" h="*" textSize="16sp" textColor="#333333" text="截图权限（必选）" checked="{{images.getScreenCaptureOptions() != null}}" marginLeft="11dp" />
+                                        </horizontal> */}
+                                    </vertical>
+                                </card>
+                                <card id='日志卡片' w="*" h="auto" cardCornerRadius="10dp"
+                                    marginTop="5dp" cardBackgroundColor='#F1F9FA' cardElevation="0dp"  >
+                                    <vertical padding="15dp 22dp ">
+                                        <horizontal gravity="center_vertical" >
+                                            <img w="28dp" h="28dp" src="ic_g_translate_black_48dp" scaleType="fitEnd" />
+                                            <Switch id="打印日志" w="*" checked="{{控件信息.打印日志}}" h="*" textSize="16sp" textColor="#333333" text="打印日志" marginLeft="11dp" />
+                                        </horizontal>
+                                        <frame w="*" h="1dp" bg='#EEEEEE' margin='0dp 15dp' />
+                                        <frame visibility="gone" w="*" h="auto" id='查看日志'>
+                                            <horizontal w="auto" h="auto" layout_gravity="left|center_vertical" gravity="center_vertical">
+                                                <img w="28dp" h="28dp" src="ic_receipt_black_48dp" scaleType="fitEnd" />
+                                                <text w="auto" h="auto" textSize="16sp" textColor="#333333" text="查看日志" marginLeft="11dp" />
+                                            </horizontal>
+                                            <img w="25dp" h="25dp" src="ic_keyboard_arrow_right_black_48dp" layout_gravity="right|center_vertical" scaleType="fitEnd" tint="#D3D3D3" />
+                                        </frame>
+                                    </vertical>
+                                </card>
+                                <card w="*" h="auto" cardCornerRadius="10dp"
+                                    marginTop="5dp" cardBackgroundColor='#F1F9FA' cardElevation="0dp"  >
+                                    <frame w="*" h="auto" id='退出登录' padding="15dp 22dp">
+                                        <horizontal w="auto" h="auto" layout_gravity="left|center_vertical" gravity="center_vertical">
+                                            <img w="28dp" h="28dp" src="ic_lock_outline_black_48dp" scaleType="fitEnd" />
+                                            <text w="auto" h="auto" textSize="16sp" textColor="#333333" text="退出登录" marginLeft="11dp" />
+                                        </horizontal>
+                                        <img w="25dp" h="25dp" src="ic_keyboard_arrow_right_black_48dp" layout_gravity="right|center_vertical" scaleType="fitEnd" tint="#D3D3D3" />
+                                    </frame>
+                                </card>
+                                <card w="*" h="auto" cardCornerRadius="10dp"
+                                    marginTop="5dp" cardBackgroundColor='#F1F9FA' cardElevation="0dp"  >
+                                    <frame w="*" h="auto" id='退出' padding="15dp 22dp">
+                                        <horizontal w="auto" h="auto" layout_gravity="left|center_vertical" gravity="center_vertical">
+                                            <img w="28dp" h="28dp" src="ic_exit_to_app_black_48dp" scaleType="fitEnd" />
+                                            <text w="auto" h="auto" textSize="16sp" textColor="#333333" text="退出  当前版本号:{{当前版本号}}" marginLeft="11dp" />
+                                        </horizontal>
+                                        <img w="25dp" h="25dp" src="ic_keyboard_arrow_right_black_48dp" layout_gravity="right|center_vertical" scaleType="fitEnd" tint="#D3D3D3" />
+                                    </frame>
+                                </card>
+                            </vertical>
+                        </scroll >
+                    </frame>
+                </viewpager>
+                <horizontal w='*' h='auto' id='bnv' layout_gravity="bottom" bg='#F1F9FA' layout_alignParentBottom='true' padding="0dp 11dp 0dp 6dp" >
+                    <vertical w="*" layout_weight="4" gravity="center" id='首页'>
+                        <img id='首页img' w="22dp" h="22dp" src="ic_dashboard_black_48dp" scaleType="fitEnd" tint="#000000" />
+                        <text id='首页text' text="首页" textColor="#000000" textStyle="bold" textSize="14sp" w='auto' h='auto' marginTop="7dp" />
+                    </vertical>
+                    <text w='60dp' h='auto' gravity="center" />
+                    <vertical w="*" layout_weight="4" gravity="center" id='我的' >
+                        <img id='我的img' w="22dp" h="22dp" src="ic_pets_black_48dp" scaleType="fitEnd" tint="#999999" />
+                        <text id='我的text' text="我的" textColor="#999999" textStyle="bold" textSize="14sp" w='auto' h='auto' marginTop="7dp" />
+                    </vertical>
+                </horizontal>
+            </relative>
+            <img id='运行' w="60dp" h="60dp" src="{{界面.启动}}" scaleType="fitEnd" layout_gravity="center_horizontal|bottom" marginBottom="20dp" />
+        </frame >
+    );
+
+    ui.viewpager.setTitles(["运行设置", "使用教程"]);
+    ui.tabs.setupWithViewPager(ui.viewpager);
+    ui.操作记录list && ui.操作记录list.setDataSource(控件信息.操作记录list || []);
+    刷新日志入口状态();
+    加载使用教程页面();
+    ui.充值按钮 && ui.充值按钮.on("click", function () {
+        threads.start(function () {
+            打开充值弹窗();
+        });
+    });
+    刷新我的页面();
+    刷新操作记录统计();
+
+    ui.vp.addOnPageChangeListener({ onPageSelected: function (position) {/*将当前的页面对应的底部标签设为选中状态*/页面切换(position) } });
+    ui.我的.click(() => { 页面切换(1) });
+    ui.首页.click(() => { 页面切换(0) });
+
+    ui.选择号码数据path.click(() => { FileUI('text/*', ui.号码数据path.widget); });
+
+    function 页面切换(页面) {
+        if (页面 == 0) {
+            ui.run(function () {
+                  /*进入指定的页面*/ ui.vp.setCurrentItem(0);
+                ui.我的text.setTextColor(colors.parseColor("#999999"))
+                ui.首页text.setTextColor(colors.parseColor("#000000"))
+                ui.我的img.attr("tint", "#999999");
+                ui.首页img.attr("tint", "#000000");
+
+            });
+
+        } else if (页面 == 1) {
+            ui.run(function () {
+             /*进入指定的页面*/ ui.vp.setCurrentItem(1);
+                ui.我的text.setTextColor(colors.parseColor("#000000"))
+                ui.首页text.setTextColor(colors.parseColor("#999999"))
+                ui.我的img.attr("tint", "#000000");
+                ui.首页img.attr("tint", "#999999");
+                加载使用教程页面();
+            });
+        }
+    }
+    ui.打印日志 && ui.打印日志.on("check", function (checked) {
+        控件信息.打印日志 = 日志功能可用() && checked;
+        保存控件信息();
+        刷新日志入口状态();
+    });
+
+    /*当离开本界面时保存todoList*/
+    ui.emitter.on("pause", () => {
+        ui控件存储();
+    });
+
+    ui.userEmailUI && ui.userEmailUI.on("click", function () {
+    let text = (控件信息.userInfo && 控件信息.userInfo.email) || "";
+    if (text) {
+        setClip(text);
+        toastLog("已复制邮箱: " + text);
+    }
+});
+
+    // ui.emitter.on("back_pressed", e => {
+    //     if (!kg) {
+    //         kg = true;
+    //         toastLog("再按一次退出");
+    //         setTimeout(() => {
+    //             kg = false;
+    //         }, 350);
+    //         e.consumed = true;
+    //     } else {
+    //         engines.stopAll();
+    //     };
+    // });
+
+    ui.emitter.on("resume", function () {
+        同步首页状态();
+    });
+
+    ui.清除记录 && ui.清除记录.on("click", function () {
+        控件信息.操作记录list = [];
+        刷新操作记录统计();
+        toastLog("清除成功");
+    });
+
+    ui.无障碍.on("click", function (checked) {
+        app.startActivity({
+            action: "android.settings.ACCESSIBILITY_SETTINGS"
+        });
+    });
+
+    ui.悬浮窗.on("click", function (checked) {
+        app.startActivity({
+            action: "android.settings.action.MANAGE_OVERLAY_PERMISSION"
+        });
+    });
+    // ui.platForms.setOnItemSelectedListener({
+    //     onItemSelected: function(parent, view, position, id) {
+    //         var selectedItem = parent.getItemAtPosition(position); // 获取选中的值
+    //         console.log("选中的值:", selectedItem);
+    //         toast("感谢使用，您已经激活" + selectedItem + "写作业！");
+    //         if(isFirstEnter) {
+    //             console.log("第一次进来不操作")
+    //             isFirstEnter = false
+    //         } else {
+    //             console.log("后面的操作就锁住")
+    //             codeStorage.put("isFirstEnter", false)
+    //             isFirstEnter = false
+    //             ui.platForms.setEnabled(isFirstEnter);
+    //         }
+    //     },
+    //     onNothingSelected: function(parent) {
+    //         console.log("未选择任何选项");
+    //     }
+    // });
+    // ui.platForms.setEnabled(isFirstEnter);
+
+    ui.退出登录 && ui.退出登录.on("click", function () { 退出登录(); });
+    ui.退出.click(() => { engines.stopAll(); });
+
+    ui.查看日志.on("click", () => { app.startActivity("console"); });
+
+    ui.运行.click(() => {
+        toastLog("开始运行");
+        ui控件存储();
+        if (!权限检测({ 悬浮窗: true, 无障碍: true })) { return; }
+
+        if (!当前App会员可用()) {
+            alert("会员提示", "当前账号未开通或已过期，无法运行任务，请先前往充值。"); return false;
+        }
+
+        if (!控件信息.私信用户_box && !控件信息.发送图片_box) {
+            alert("友情提示", "尚未选择功能"); return false;
+        }
+
+        if (控件信息.私信用户_box) {
+            let 已选话术 = 控件信息.话术库list.filter((Value) => {
+                return Value.done == true;
+            });
+            if (已选话术.length - 1 <= -1) {
+                alert("友情提示", "尚未选择话术"); return false;
+            }
+        }
+
+        if (控件信息.发送图片_box) {
+            let 已选图片位置 = []
+            try {
+                已选图片位置 = 控件信息.图片位置.split(",").filter((Value) => {
+                    return parseInt(Value) > 0 && parseInt(Value) < 10;
+                });
+            } catch (error) {
+                alert("参数错误", "图片位置参数异常，请注意英文逗号,示例: 1,2,3"); return false;
+            }
+            console.log(已选图片位置)
+            if (已选图片位置.length - 1 <= -1) {
+                alert("友情提示", "尚未选择图片位置"); return false;
+            }
+            if (已选图片位置.length >= maxImages) {
+                alert("友情提示", "最多选择" + maxImages + "张图片"); return false;
+            }
+        }
+
+        控件信息.已获取number = 0;
+
+        // home();
+        if (!toast监控.是否开启) {
+            events.observeToast();
+            events.onToast(function (toast) {
+                toast监控.是否开启 = true;
+                toast监控.toast内容 = toast.getText();
+            });
+        }
+        if (!悬浮窗线程.isAlive()) {
+            myConsole("启动悬浮窗")
+            aimAPP = ui.platForms.getSelectedItem()
+            platForms = adjustIndex(platForms, aimAPP)
+            console.log("aimAPP")
+            console.log(aimAPP)
+            uiStorage.put("platForms", platForms)
+            悬浮窗线程 = threads.start(
+                function () {
+                    悬浮窗('主程序');
+                }
+            );
+        }
+        // threads.start(function() {
+        //     主程序()
+        // })
+    });
+}
+
+function 打开充值弹窗() {
+    try {
+        let rechargeToken = 获取当前App充值Token();
+        if (!rechargeToken) return;
+
+        let ticketData = 创建充值SSOTicket(rechargeToken);
+        if (!ticketData || !ticketData.ticket) return;
+
+        let iframeUrl = membershipWebBase + (ticketData.consume_url || ("/sso/consume?ticket=" + encodeURIComponent(ticketData.ticket)));
+        记录关键日志("recharge.iframe.url", iframeUrl);
+
+        ui.run(function () {
+            let rechargeView = ui.inflate(
+                <vertical bg="#FFFFFF">
+                    <horizontal
+                        w="*"
+                        h="50dp"
+                        gravity="center_vertical"
+                        bg="#26b3c6"
+                        padding="12dp 0">
+
+                        <text
+                            text="会员充值"
+                            textColor="#FFFFFF"
+                            textSize="18sp"
+                            textStyle="bold"
+                            layout_weight="1"
+                            marginLeft="16dp" />
+
+                        <text
+                            id="关闭充值页"
+                            text="关闭"
+                            textColor="#FFFFFF"
+                            textSize="16sp"
+                            marginRight="16dp" />
+                    </horizontal>
+
+                    <webview
+                        id="充值网页"
+                        w="360dp"
+                        h="520dp" />
+
+                    <horizontal
+                        w="*"
+                        gravity="center"
+                        padding="12dp">
+
+                        <card
+                            w="170dp"
+                            h="44dp"
+                            cardCornerRadius="22dp"
+                            cardBackgroundColor="#26b3c6"
+                            cardElevation="0dp">
+
+                            <vertical id="完成充值返回" w="*" h="*" gravity="center">
+                                <text
+                                    text="关闭并刷新会员信息"
+                                    textColor="#FFFFFF"
+                                    textSize="14sp" />
+                            </vertical>
+                        </card>
+                    </horizontal>
+                </vertical>,
+                null,
+                false
+            );
+
+            let dialog = dialogs.build({
+                customView: rechargeView,
+                wrapInScrollView: false,
+                autoDismiss: false
+            }).show();
+
+            let webView = rechargeView.充值网页;
+            配置内嵌网页(webView, "充值页");
+            webView.loadUrl(iframeUrl);
+
+            function 关闭充值页并刷新() {
+                dialog.dismiss();
+                threads.start(function () {
+                    let ok = 获取我的信息();
+                    记录关键日志("recharge.afterRefresh", {
+                        ok: ok,
+                        memberLevel: 控件信息.memberLevel,
+                        memberStatus: 控件信息.memberStatus,
+                        expireAt: 控件信息.memberExpireAt
+                    });
+                    ui.run(function () {
+                        刷新我的页面();
+                        toastLog("会员信息已刷新");
+                    });
+                });
+            }
+
+            rechargeView.关闭充值页.on("click", function () {
+                关闭充值页并刷新();
+            });
+
+            rechargeView.完成充值返回.on("click", function () {
+                关闭充值页并刷新();
+            });
+        });
+    } catch (e) {
+        console.error(e);
+        toastLog("打开充值页失败: " + e);
+    }
+}
+
+// ==================== 页面逻辑与会员业务 ====================
+
+function 获取公开配置() {
+    try {
+        let res = http.get(memberApiBase + "/admin/settings/public/config");
+        if (res.statusCode != 200) return {};
+        return JSON.parse(res.body.string()) || {};
+    } catch (e) {
+        console.log(e);
+        return {};
+    }
+}
+
+function 是否启用登录验证码() {
+    let config = 获取公开配置();
+    控件信息.loginCaptchaEnabled = !!config.login_captcha_enabled;
+    保存控件信息();
+    return 控件信息.loginCaptchaEnabled;
+}
+
+function 获取图形验证码() {
+    try {
+        let res = http.get(memberApiBase + "/auth/captcha");
+        if (res.statusCode != 200) {
+            toastLog("获取验证码失败: " + res.body.string());
+            return null;
+        }
+
+        let data = JSON.parse(res.body.string()) || {};
+        let imageBase64 = data.image_base64 || data.captcha_base64 || data.base64 || data.image || data.captcha_image || "";
+        if (imageBase64 && imageBase64.indexOf("data:image") !== 0) {
+            imageBase64 = "data:image/png;base64," + imageBase64;
+        }
+
+        if (!data.captcha_id || !imageBase64) {
+            toastLog("验证码返回格式异常");
+            return null;
+        }
+
+        return {
+            captcha_id: data.captcha_id,
+            image_base64: imageBase64
+        };
+    } catch (e) {
+        console.log(e);
+        toastLog("获取验证码异常: " + e);
+        return null;
+    }
+}
+
+function 执行会员登录() {
+    if (!控件信息.账号 || !控件信息.密码) {
+        toastLog("请输入账号和密码");
+        return;
+    }
+
+    toastLog("登录中...");
+    if (是否启用登录验证码()) {
+        显示登录验证码弹窗(控件信息.账号, 控件信息.密码);
+        return;
+    }
+
+    threads.start(function () {
+        let ok = 后端登录(控件信息.账号, 控件信息.密码);
+        if (ok) {
+            ui.run(function () {
+                首页ui();
+            });
+        }
+    });
+}
+
+function 获取当前App充值链接() {
+    try {
+        if (!控件信息.token) {
+            toastLog("请先登录");
+            return null;
+        }
+
+        let url = memberApiBase + "/recharge/by-app-name?app_name=" + encodeURIComponent(membershipAppName);
+        记录关键日志("recharge.link.request", { url: url, appName: membershipAppName, appCode: membershipAppCode });
+        let res = http.get(url, {
+            headers: {
+                "Authorization": "Bearer " + 控件信息.token
+            }
+        });
+
+        let rawBody = res.body.string();
+        记录关键日志("recharge.link.response", { statusCode: res.statusCode, body: rawBody });
+        if (res.statusCode != 200) {
+            return null;
+        }
+
+        let data = JSON.parse(rawBody) || {};
+        if (!data.token) {
+            记录关键日志("recharge.link.empty", data);
+            return null;
+        }
+        return data;
+    } catch (e) {
+        console.error(e);
+        记录关键日志("recharge.link.error", String(e));
+        return null;
+    }
+}
+
+function 清空登录会话(是否清空账号密码) {
+    控件信息.token = "";
+    控件信息.refresh_token = "";
+    控件信息.userInfo = null;
+    控件信息.entitlements = [];
+    控件信息.memberAvailable = false;
+    控件信息.loginCaptchaEnabled = false;
+    重置会员信息();
+    if (是否清空账号密码) {
+        控件信息.账号 = "";
+        控件信息.密码 = "";
+    }
+    保存控件信息();
+}
+
+function 退出登录() {
+    清空登录会话(true);
+    toastLog("已退出登录");
+    ui.run(function () {
+        登录ui();
+    });
+}
+
+function 启动入口() {
+    if (!控件信息.token) {
+        登录ui();
+        return;
+    }
+
+    threads.start(function () {
+        let ok = 获取我的信息();
+        ui.run(function () {
+            if (ok) {
+                首页ui();
+                toastLog("已恢复登录状态");
+            } else {
+                清空登录会话(false);
+                登录ui();
+            }
+        });
+    });
+}
+
+function 后端登录(emailOrUsername, password, loginExtra) {
+    try {
+        let loginPayload = {
+            "email_or_username": emailOrUsername,
+            "password": password
+        };
+        if (loginExtra && loginExtra.captcha_id) {
+            loginPayload.captcha_id = loginExtra.captcha_id;
+        }
+        if (loginExtra && loginExtra.captcha_code) {
+            loginPayload.captcha_code = loginExtra.captcha_code;
+        }
+
+        记录关键日志("auth.login.request", {
+            account: emailOrUsername,
+            hasCaptchaId: !!loginPayload.captcha_id,
+            hasCaptchaCode: !!loginPayload.captcha_code
+        });
+        let res = http.postJson(memberApiBase + "/auth/login", loginPayload);
+
+        if (res.statusCode != 200) {
+            toastLog("登录失败: " + res.body.string());
+            return false;
+        }
+
+        let data = JSON.parse(res.body.string());
+        记录关键日志("auth.login.response", { statusCode: res.statusCode, hasAccessToken: !!data.access_token });
+        if (!data.access_token) {
+            toastLog("登录失败: 未获取到 token");
+            return false;
+        }
+
+        控件信息.token = data.access_token;
+        控件信息.refresh_token = data.refresh_token || "";
+        保存控件信息();
+
+        let ok = 获取我的信息();
+        if (!ok) {
+            toastLog("登录成功，但获取用户信息失败");
+            return false;
+        }
+
+        if (当前App会员可用()) {
+            toastLog("登录成功");
+        } else {
+            toastLog("登录成功，但当前 App 会员未开通或已过期，请先充值");
+        }
+        return true;
+    } catch (e) {
+        console.log(e);
+        toastLog("登录异常: " + e);
+        return false;
+    }
+}
+
+function 获取我的信息() {
+    try {
+        if (!控件信息.token) return false;
+
+        // 默认先给普通会员
+        重置会员信息();
+
+        let meRes = http.get(memberApiBase + "/auth/me", {
+            headers: {
+                "Authorization": "Bearer " + 控件信息.token
+            }
+        });
+        let meRawBody = meRes.body.string();
+        记录关键日志("auth.me.response", { statusCode: meRes.statusCode, body: meRawBody });
+
+        if (meRes.statusCode != 200) {
+            toastLog("获取个人信息失败");
+            return false;
+        }
+
+        控件信息.userInfo = JSON.parse(meRawBody);
+
+        let entRes = http.get(memberApiBase + "/entitlements/me", {
+            headers: {
+                "Authorization": "Bearer " + 控件信息.token
+            }
+        });
+        let entRawBody = entRes.body.string();
+        记录关键日志("entitlements.response", { statusCode: entRes.statusCode, body: entRawBody });
+
+        if (entRes.statusCode == 200) {
+            let ents = JSON.parse(entRawBody) || [];
+            同步当前App会员信息(ents);
+        } else {
+            同步当前App会员信息([]);
+        }
+
+        保存控件信息();
+        return true;
+    } catch (e) {
+        console.log(e);
+        return false;
+    }
+}
+
+function 创建充值SSOTicket(rechargeToken) {
+    try {
+        if (!控件信息.token) {
+            toastLog("请先登录");
+            return null;
+        }
+
+        let url = memberApiBase + "/sso/ticket";
+        记录关键日志("recharge.sso.request", {
+            url: url,
+            recharge_token: rechargeToken,
+            source_app_code: membershipAppCode
+        });
+        let res = http.postJson(url, {
+            "recharge_token": rechargeToken,
+            "ttl_seconds": 45,
+            "source_app_code": membershipAppCode
+        }, {
+            headers: {
+                "Authorization": "Bearer " + 控件信息.token
+            }
+        });
+
+        if (res.statusCode != 200) {
+            toastLog("创建充值票据失败: " + res.body.string());
+            return null;
+        }
+
+        let data = JSON.parse(res.body.string());
+        记录关键日志("recharge.sso.response", { statusCode: res.statusCode, body: data });
+        if (!data.ticket) {
+            toastLog("创建充值票据失败: 未返回 ticket");
+            return null;
+        }
+
+        return data;
+    } catch (e) {
+        console.error(e);
+        toastLog("创建充值票据异常");
+        return null;
+    }
+}
+
+function 获取当前App充值Token() {
+    let rechargeLink = 获取当前App充值链接();
+    if (rechargeLink && rechargeLink.token) {
+        记录关键日志("recharge.link.useRemote", rechargeLink);
+        return rechargeLink.token;
+    }
+
+    if (membershipRechargeToken && membershipRechargeToken != "这里替换成_IdBotAuto_对应的_recharge_token") {
+        记录关键日志("recharge.link.useLocalFallback", { rechargeToken: membershipRechargeToken, appName: membershipAppName, appCode: membershipAppCode });
+        toastLog("接口未查到充值链接，已自动回退到本地配置的 recharge token");
+        return membershipRechargeToken;
+    }
+
+    toastLog("未找到可用充值链接，请先在会员后台为 " + membershipAppName + " 配置 active 充值链接");
+    return null;
+}
+
+// ==================== 取数与日志摘要 ====================
+
+function 日志脱敏值(value, head, tail) {
+    let text = String(value == null ? "" : value)
+    head = head == null ? 3 : head
+    tail = tail == null ? 3 : tail
+    if (!text) return ""
+    if (text.length <= head + tail + 3) return text
+    return text.slice(0, head) + "***" + text.slice(-tail)
+}
+
+function 日志简略文本(value, maxLen) {
+    let text = String(value == null ? "" : value)
+    maxLen = maxLen || 120
+    if (text.length <= maxLen) return text
+    return text.slice(0, maxLen) + "...(len=" + text.length + ")"
+}
+
+function 提取取数样本ID(items, maxCount) {
+    items = items || []
+    maxCount = maxCount || 3
+    let ids = []
+    for (let i = 0; i < items.length && ids.length < maxCount; i++) {
+        let item = items[i] || {}
+        let rawId = item.id
+        if ((rawId === undefined || rawId === null || rawId === "") && item.content) {
+            try {
+                let contentObj = typeof item.content == "string" ? JSON.parse(item.content) : item.content
+                rawId = contentObj.uid || contentObj.id || contentObj.room_id || contentObj.user_id || ""
+            } catch (e) { }
+        }
+        if (rawId !== undefined && rawId !== null && rawId !== "") {
+            ids.push(日志脱敏值(rawId))
+        }
+    }
+    return ids
+}
+
+function 构建取数请求摘要(signed, key, withIn, limit, attempt) {
+    return {
+        attempt: attempt,
+        path: signed.path,
+        key: key,
+        with_in: withIn,
+        ts: signed.ts,
+        limit: limit,
+        sign_preview: 日志脱敏值(signed.sign, 6, 6),
+        sign_length: String(signed.sign || "").length,
+        request_url: FETCH_API_CONFIG.baseUrl + signed.path
+    }
+}
+
+function 构建取数响应摘要(rawBody, statusCode, path, attempt) {
+    let summary = {
+        attempt: attempt,
+        path: path,
+        statusCode: statusCode,
+        body_length: String(rawBody || "").length
+    }
+    try {
+        let parsed = JSON.parse(rawBody || "{}")
+        let payload = parsed.data || {}
+        let items = payload.items || []
+        summary.code = parsed.code
+        summary.msg = parsed.message || parsed.msg || ""
+        summary.mode = payload.mode
+        summary.table = payload.table
+        summary.table_exists = payload.table_exists
+        summary.with_in = payload.with_in
+        summary.payload_count = payload.count
+        summary.item_count = items.length
+        let sampleIds = 提取取数样本ID(items)
+        if (sampleIds.length > 0) {
+            summary.sample_ids = sampleIds
+        }
+    } catch (e) {
+        summary.body_preview = 日志简略文本(rawBody || "", 120)
+    }
+    return summary
+}
+
+function 构建兼容取数摘要(compatible) {
+    compatible = compatible || {}
+    let meta = compatible.fetch_meta || {}
+    let items = compatible.data && compatible.data.data ? compatible.data.data : []
+    let summary = {
+        mode: meta.mode,
+        table: meta.table,
+        count: meta.count,
+        table_exists: meta.table_exists,
+        with_in: meta.with_in,
+        normalized_count: items.length
+    }
+    let sampleIds = 提取取数样本ID(items)
+    if (sampleIds.length > 0) {
+        summary.sample_ids = sampleIds
+    }
+    return summary
+}
+
+function 生成取数签名(key, withIn, ts) {
+    try {
+        let message = "key=" + key + "&with_in=" + withIn + "&ts=" + ts;
+        记录自动化日志("fetch.sign.input", {
+            key: key,
+            with_in: withIn,
+            ts: ts,
+            secret_length: String(FETCH_API_CONFIG.secret || "").length
+        }, "DEBUG");
+        let Mac = javax.crypto.Mac;
+        let SecretKeySpec = javax.crypto.spec.SecretKeySpec;
+        let mac = Mac.getInstance("HmacSHA256");
+        let secretKey = new SecretKeySpec(java.lang.String(FETCH_API_CONFIG.secret).getBytes("UTF-8"), "HmacSHA256");
+        mac.init(secretKey);
+        let bytes = mac.doFinal(java.lang.String(message).getBytes("UTF-8"));
+        let sb = new java.lang.StringBuilder();
+        for (let i = 0; i < bytes.length; i++) {
+            let b = bytes[i];
+            if (b < 0) b += 256;
+            let hex = String(java.lang.Integer.toHexString(b));
+            if (hex.length == 1) sb.append("0");
+            sb.append(hex);
+        }
+        let sign = String(sb.toString());
+        记录自动化日志("fetch.sign.output", {
+            sign_preview: 日志脱敏值(sign, 6, 6),
+            sign_length: String(sign || "").length
+        }, "DEBUG");
+        return sign;
+    } catch (error) {
+        记录自动化日志("fetch.sign.error", String(error), "ERROR");
+        return "";
+    }
+}
+
+function 构建取数URL(path, key, withIn, limit) {
+    let ts = Math.floor(new Date().getTime() / 1000);
+    let sign = 生成取数签名(key, withIn, ts);
+    let url = FETCH_API_CONFIG.baseUrl + path
+        + "?key=" + encodeURIComponent(key)
+        + "&with_in=" + encodeURIComponent(withIn)
+        + "&ts=" + encodeURIComponent(ts)
+        + "&sign=" + encodeURIComponent(sign)
+        + "&limit=" + encodeURIComponent(limit);
+    return {
+        path: path,
+        ts: ts,
+        sign: sign,
+        url: url
+    };
+}
+
+function 兼容取数返回(raw) {
+    raw = raw || {};
+    let payload = raw.data || {};
+    let items = payload.items || [];
+    let normalized = [];
+
+    for (let i = 0; i < items.length; i++) {
+        let item = items[i] || {};
+        let content = item.content;
+        if (typeof content != "string") {
+            try {
+                content = JSON.stringify(content || {});
+            } catch (e) {
+                content = "{}";
+            }
+        }
+        normalized.push({
+            table: item.table || payload.table || idType,
+            id: item.id,
+            create_time: item.create_time,
+            content: content
+        });
+    }
+
+    return {
+        code: raw.code,
+        msg: raw.message || raw.msg || "ok",
+        data: {
+            data: normalized,
+            total_pages: page
+        },
+        fetch_meta: {
+            mode: payload.mode,
+            table: payload.table,
+            count: payload.count,
+            table_exists: payload.table_exists,
+            with_in: payload.with_in
+        }
+    };
+}
+
+// ==================== 自动化调度与任务执行 ====================
+
+function myConsole(textStr) {
+    if (!日志输出已开启()) return;
+    日志({ 文本: textStr, level: "DEBUG" });
+}
+
+function randomSleep(min, max) {
+    sleep(RandomInt(parseInt(min), parseInt(max)))
+}
+
+function listenserInOtherPage() {
+    if (checkThreads !== null) {
+        console.log("启动过了，无需再次启动listenserInOtherPage")
+        return
+    }
+    checkThreads = threads.start(function () {
+        while (1) {
+            sleep(1000 * 10)
+            console.log("当前状态:" + RrstartStatus)
+            if (RrstartStatus === "正常") {
+                // 开始监听是否回到首页
+                if (packageName(apkPackage).visibleToUser(true).findOnce()) {
+                    console.log("仍然在界面:" + RrstartStatus)
+                    continue
+                } else {
+                    console.log("不在界面:" + RrstartStatus)
+                    sleep(30 * 1000)
+                    if (packageName(apkPackage).visibleToUser(true).findOnce()) {
+                        console.log("仍然在界面222:" + RrstartStatus)
+                        continue
+                    } else {
+                        console.log("不在界面2222:" + RrstartStatus)
+                        RrstartStatus = "异常"
+                    }
+                }
+            }
+
+            if (RrstartStatus === "初始化") {
+                console.log("还未开始监听...")
+                continue
+            }
+            if (RrstartStatus === "正常") {
+                continue
+            }
+            if (RrstartStatus === "异常") {
+                主程序线程.interrupt();
+                // window.运行.attr("tint", "#76EEC6");
+                // window.运行.attr("src", "ic_play_arrow_black_48dp");
+                sleep(5 * 1000)
+                toastLog("即将自动重启修复...")
+                主程序线程 = threads.start(主程序);
+                RrstartStatus = "初始化"
+            }
+
+        }
+    })
+}
+
+function checkInstallApp() {
+    if (!getAppName(apkPackage)) {
+        dialogs.build({
+            title: "友情提示",
+            content: "尚未安装",
+            positive: "确定",
+        }).show();
+        return false;
+    }
+    控件信息.ws版本 = 获取应用版本名(apkPackage);
+    日志({ 文本: "版本比对:" + appVersion + "<-->" + 控件信息.ws版本 });
+    return true
+}
+
+function 主程序() {
+
+    console.log(控件信息)
+    pressOk()
+    actionSpeed = RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+    home()
+    listenserInOtherPage()
+    sleep(3000)
+    toastLog("启动APP" + aimAPP)
+
+    if (aimAPP === "咪鸭") {
+        idType = "page_data_9"
+        apkPackage = "com.jiuyin.mc"
+        appVersion = "1.6.51"
+        fullIdPre = "com.jiuyin.mc:id/"
+        app.launchApp("咪鸭")
+        if (checkInstallApp()) {
+            miya_idTask()
+        }
+    } else if (aimAPP == "PP") {
+        idType = "page_data_26"
+        apkPackage = "com.lizhi.pplive"
+        appVersion = "7.15.0"
+        fullIdPre = "com.lizhi.pplive:id/"
+        app.launchApp("PP")
+        if (checkInstallApp()) {
+            PP_idTask()
+        }
+    } else if (aimAPP == "蓝伴语音") {
+        idType = "page_data_33"
+        apkPackage = "com.nanshan.blue.companion"
+        appVersion = "2.6.5"
+        fullIdPre = "com.nanshan.blue.companion:id/"
+        app.launchApp("蓝伴语音")
+        if (checkInstallApp()) {
+            LanBan_idTask()
+        }
+    } else if (aimAPP == "捞月狗") {
+        idType = "page_data_5"
+        apkPackage = "com.laoyuegou.android"
+        appVersion = "5.5.6"
+        fullIdPre = "com.laoyuegou.android:id/"
+        app.launchApp("捞月狗")
+        if (checkInstallApp()) {
+            LaoYueGou_idTask()
+        }
+    } else if (aimAPP == "不二开黑") {
+        idType = "page_data_15"
+        apkPackage = "com.buerkaihei.meet"
+        appVersion = "5.5.6"
+        fullIdPre = "com.buerkaihei.meet:id/"
+        app.launchApp("不二开黑")
+        if (checkInstallApp()) {
+            BuerKaiHei_idTask()
+        }
+    } else {
+        toastLog(aimAPP + "正在升级，敬请期待...")
+        dialogs.build({
+            title: "友情提示",
+            content: aimAPP + "正在升级，敬请期待...",
+            positive: "确定",
+        }).show();
+        sleep(3000)
+    }
+
+    返回ui页()
+}
+
+function BuerKaiHei_idTask() {
+    toastLog("寻找首页中...")
+    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+    if (loopResultTextTimer("请输入房间昵称、ID", 5)) {
+        console.log("已经在ID搜索页")
+    } else {
+        backIndex("我的")
+        RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+        clickCenterByObj(loopResultTextTimer("首页", 3))
+        RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+        let searchBtn = loopResultIdTimer(fullIdPre + "ivSearch", 5)
+        if (searchBtn) {
+            console.log("点击搜索")
+            if (searchBtn.clickable()) {
+                searchBtn.click()
+            } else {
+                clickCenterByObj(searchBtn)
+            }
+            RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+        }
+    }
+
+    let timer = 0
+    while (1) {
+        let res = threadRunOne(getIds, within)
+        if (res.hasOwnProperty("code") && res.data.data.length > 0) {
+            toastLog("获取到" + res.data.data.length + "条ID数据 还有很多条")
+            for (let i = 0; i < res.data.data.length; i++) {
+                // 开始
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (res.hasOwnProperty("type") && res["type"] == "local_id") {
+                    idStr = res.data.data[i]
+                } else {
+                    if (timer >= parseInt(控件信息.操作阈值)) {
+                        toastLog("达到操作阈值，任务停止...")
+                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        return
+                    }
+                    let sex = judgeSex()
+                    let jsonData = JSON.parse(res.data.data[i]["content"])
+                    // console.log("当前数据:" + JSON.stringify(jsonData))
+                    if (sex !== "") {
+                        console.log("进入性别判断")
+                        if (jsonData["gender_text"] !== sex) {
+                            myConsole("性别" + jsonData["gender_text"] + "不符合")
+                            continue
+                        }
+                    }
+                    let isAnchor = judgIsAnchor()
+                    if (isAnchor !== "" && jsonData["is_anchor"] !== null) {
+                        console.log("进入主播判断")
+                        if (jsonData["is_anchor"] !== isAnchor) {
+                            myConsole("模特" + jsonData["is_anchor"] + "不符合")
+                            continue
+                        }
+                    }
+                    let moneyValue = jsonData["value"]
+                    if (控件信息.消费范围_box) {
+                        console.log("进入消费范围判断")
+                        let isOk = judgMoneyValue(moneyValue)
+                        if (!isOk) {
+                            myConsole("消费范围" + moneyValue + "不符合")
+                            continue
+                        }
+                    }
+                    idStr = getIdReg(res.data.data[i]["content"])
+                    if (!idStr) {
+                        myConsole("ID解析失败 content_length=" + String(res.data.data[i]["content"] || "").length + ", result=" + 日志脱敏值(idStr))
+                        continue
+                    }
+                }
+                if (控件信息.重复不写_box) {
+                    if (long_cache.indexOf(idStr) != -1) {
+                        myConsole("long_cache idStr: " + 日志脱敏值(idStr) + "已存在缓存")
+                        continue
+                    }
+                } else {
+                    if (cache.indexOf(idStr) != -1) {
+                        myConsole("idStr: " + 日志脱敏值(idStr) + "已存在缓存")
+                        continue
+                    }
+                }
+                toastLog("开始ID: " + 日志脱敏值(idStr)) // text("搜索用户ID/房间ID")
+                cache.push(idStr)
+                dateStorage.put("cache", cache)
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                // let inputBar = loopResultTextTimer("搜索用户，房间", 5)
+                let inputBar = loopResultIdTimer(fullIdPre + "et_search", 3)
+                if (inputBar) {
+                    if (inputBar.clickable()) {
+                        inputBar.click()
+                    } else {
+                        clickCenterByObj(inputBar)
+                    }
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                setText(idStr.trim())
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (控件信息.搜索坐标_box) {
+                    toastLog("点击坐标: x" + 控件信息.搜索位置X + ",y" + 控件信息.搜索位置Y)
+                    if (parseInt(控件信息.搜索位置X) > 0 && parseInt(控件信息.搜索位置Y) > 0) {
+                        click(parseInt(控件信息.搜索位置X), parseInt(控件信息.搜索位置Y))
+                    }
+                } else {
+                    toastLog("自动回车")
+                    pressOk()
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let aimUser = loopResultTextTimer("ID: " + idStr.trim(), 5)
+                // if (!aimUser) {
+                //     myConsole("idStr: " + 日志脱敏值(idStr) + "无效ID")
+                //     continue
+                // }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                // let atMai = loopResultTextTimer("在麦上", 2)
+                // if (atMai) {
+                //     myConsole("idStr: " + 日志脱敏值(idStr) + "在麦上,跳过")
+                //     continue
+                // }
+                if (aimUser) {
+                    if (aimUser.clickable()) {
+                        aimUser.click()
+                    } else {
+                        clickCenterByObj(aimUser)
+                    }
+                }
+
+                let enterBtn = loopResultTextTimer("聊一聊", 5)
+                if (!enterBtn) {
+                    myConsole("id: " + 日志脱敏值(idStr) + "没有可以打招呼的按钮")
+                    // if (textContains("是否").visibleToUser(true).findOnce()) {
+                    //     clickCenterByObj(loopResultTextTimer("取消", 2))
+                    // }
+                    backIndexId(fullIdPre + "et_search")
+                    continue
+                }
+                clickCenterByObj(enterBtn)
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                RrstartStatus = "正常"
+                if (控件信息.私信用户_box) {
+                    let chatBtn = loopResultTextTimer("请输入消息...", 5)
+                    // clickCenterByObj(chatBtn)
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    let msg = 控件信息.话术库list[RandomInt(0, 控件信息.话术库list.length - 1)]["data"]
+                    myConsole(msg)
+                    setText(msg)
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    let sendBtn = loopResultIdTimer(fullIdPre + "btn_send", 3)
+                    if (sendBtn) {
+                        if (sendBtn.clickable()) {
+                            sendBtn.click()
+                        } else {
+                            clickCenterByObj(sendBtn)
+                        }
+                    }
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    // clickCenterByObj(loopResultIdTimer(fullIdPre + "chat_room_single_send", 5))
+                }
+                RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (控件信息.发送图片_box) {
+                    loopResultIdTimer(fullIdPre + "picture_iv", 3)
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    let imageBtn = loopResultIdTimer(fullIdPre + "picture_iv", 3)
+                    if (imageBtn) {
+                        console.log(imageBtn.clickable())
+                        console.log(imageBtn)
+                        if (imageBtn.clickable()) {
+                            imageBtn.click()
+                        } else {
+                            clickCenterByObj(imageBtn)
+                        }
+                        RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        let authCehckDialog = loopResultTextTimer("权限使用说明", 2)
+                        if(authCehckDialog) {
+                            clickCenterByObj(loopResultIdTimer(fullIdPre + "tv_confirm", 3))
+                            RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                            clickCenterByObj(loopResultTextTimer("允许", 3))
+                            RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        }
+                    } else {
+                        myConsole("id: " + 日志脱敏值(idStr) + "点击图片失败")
+                        backIndexId(fullIdPre + "et_search")
+                        continue
+                    }
+                    let image_poses = 控件信息.图片位置.split(",").filter((Value) => {
+                        return parseInt(Value) > 0 && parseInt(Value) < 10;
+                    });
+                    loopResultIdTimer(fullIdPre + "btnCheck")
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    let imageSeles = id(fullIdPre + "btnCheck").visibleToUser(true).find()
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    toastLog("当前图片选择位置" + image_poses)
+                    console.log(image_poses)
+                    if (imageSeles.length >= image_poses.length) {
+                        image_poses.forEach(pos => {
+                            RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                            // console.log(imageSeles[aimPos])
+                            let aimPos = parseInt(pos) - 1
+                            if (imageSeles[aimPos].clickable()) {
+                                imageSeles[aimPos].click()
+                            } else {
+                                clickCenterByObj(imageSeles[aimPos])
+                            }
+                        })
+                    }
+                    // RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    // clickCenterByObj(loopResultTextTimer("原图", 3))
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    clickCenterByObj(loopResultIdTimer(fullIdPre + "ps_tv_complete", 3))
+                }
+                timer++
+                let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
+                toastLog("等待" + sleepTime + "秒")
+                sleep(sleepTime * 1000)
+                backIndexId(fullIdPre + "et_search")
+            }
+            myConsole("页数比较: " + page + ":" + res.data.total_pages)
+            if (parseInt(page) === parseInt(res.data.total_pages)) {
+                myConsole("达到最大页数" + page)
+                break
+            } else {
+                page++
+                dateStorage.put("page", page)
+                myConsole("页数+1：" + page)
+            }
+        } else {
+            toastLog(res.msg + "60秒后重试")
+            sleep(60 * 1000)
+        }
+    }
+}
+
+function LaoYueGou_idTask() {
+    toastLog("寻找首页中...")
+    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+    if (loopResultTextTimer("搜索用户，房间", 5)) {
+        console.log("已经在ID搜索页")
+    } else {
+        if (!loopResultTextTimer("搜索用户，房间", 5)) {
+            backIndex("我")
+            RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+            clickCenterByObj(loopResultTextTimer("首页", 3))
+            RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+            let searchBtns = classNameEndsWith("ViewGroup").clickable(true).boundsInside(device.width * 0.5, 0, device.width, device.height * 0.2).find()
+            if (searchBtns.length > 0) {
+                console.log("点击搜索")
+                if (searchBtns[0].clickable()) {
+                    searchBtns[0].click()
+                } else {
+                    clickCenterByObj(searchBtns[0])
+                }
+                RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+            }
+        }
+    }
+
+    let timer = 0
+    while (1) {
+        let res = threadRunOne(getIds, within)
+        if (res.hasOwnProperty("code") && res.data.data.length > 0) {
+            toastLog("获取到" + res.data.data.length + "条ID数据 还有很多条")
+            for (let i = 0; i < res.data.data.length; i++) {
+                // 开始
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (res.hasOwnProperty("type") && res["type"] == "local_id") {
+                    idStr = res.data.data[i]
+                } else {
+                    if (timer >= parseInt(控件信息.操作阈值)) {
+                        toastLog("达到操作阈值，任务停止...")
+                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        return
+                    }
+                    let sex = judgeSex()
+                    let jsonData = JSON.parse(res.data.data[i]["content"])
+                    // console.log("当前数据:" + JSON.stringify(jsonData))
+                    if (sex !== "") {
+                        console.log("进入性别判断")
+                        if (jsonData["gender_text"] !== sex) {
+                            myConsole("性别" + jsonData["gender_text"] + "不符合")
+                            continue
+                        }
+                    }
+                    let isAnchor = judgIsAnchor()
+                    if (isAnchor !== "" && jsonData["is_anchor"] !== null) {
+                        console.log("进入主播判断")
+                        if (jsonData["is_anchor"] !== isAnchor) {
+                            myConsole("模特" + jsonData["is_anchor"] + "不符合")
+                            continue
+                        }
+                    }
+                    let moneyValue = jsonData["value"]
+                    if (控件信息.消费范围_box) {
+                        console.log("进入消费范围判断")
+                        let isOk = judgMoneyValue(moneyValue)
+                        if (!isOk) {
+                            myConsole("消费范围" + moneyValue + "不符合")
+                            continue
+                        }
+                    }
+                    idStr = getIdReg(res.data.data[i]["content"])
+                    if (!idStr) {
+                        myConsole("ID解析失败 content_length=" + String(res.data.data[i]["content"] || "").length + ", result=" + 日志脱敏值(idStr))
+                        continue
+                    }
+                }
+                if (控件信息.重复不写_box) {
+                    if (long_cache.indexOf(idStr) != -1) {
+                        myConsole("long_cache idStr: " + 日志脱敏值(idStr) + "已存在缓存")
+                        continue
+                    }
+                } else {
+                    if (cache.indexOf(idStr) != -1) {
+                        myConsole("idStr: " + 日志脱敏值(idStr) + "已存在缓存")
+                        continue
+                    }
+                }
+                toastLog("开始ID: " + 日志脱敏值(idStr)) // text("搜索用户ID/房间ID")
+                cache.push(idStr)
+                dateStorage.put("cache", cache)
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                // let inputBar = loopResultTextTimer("搜索用户，房间", 5)
+                let inputBar = classNameEndsWith("EditText").clickable(true).findOnce()
+                if (inputBar) {
+                    if (inputBar.clickable()) {
+                        inputBar.click()
+                    } else {
+                        clickCenterByObj(inputBar)
+                    }
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                setText(idStr.trim())
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (控件信息.搜索坐标_box) {
+                    toastLog("点击坐标: x" + 控件信息.搜索位置X + ",y" + 控件信息.搜索位置Y)
+                    if (parseInt(控件信息.搜索位置X) > 0 && parseInt(控件信息.搜索位置Y) > 0) {
+                        click(parseInt(控件信息.搜索位置X), parseInt(控件信息.搜索位置Y))
+                    }
+                } else {
+                    toastLog("自动回车")
+                    pressOk()
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let aimUser = loopResultTextTimer("狗号：" + idStr.trim(), 5)
+                if (!aimUser) {
+                    myConsole("idStr: " + 日志脱敏值(idStr) + "无效ID")
+                    continue
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let atMai = loopResultTextTimer("在麦上", 2)
+                if (atMai) {
+                    myConsole("idStr: " + 日志脱敏值(idStr) + "在麦上,跳过")
+                    continue
+                }
+                if (aimUser) {
+                    if (aimUser.clickable()) {
+                        aimUser.click()
+                    } else {
+                        clickCenterByObj(aimUser)
+                    }
+                }
+
+                let enterBtn = loopResultTextTimer("私聊", 5)
+                if (!enterBtn) {
+                    myConsole("id: " + 日志脱敏值(idStr) + "没有可以打招呼的按钮")
+                    if (textContains("是否").visibleToUser(true).findOnce()) {
+                        clickCenterByObj(loopResultTextTimer("取消", 2))
+                    }
+                    backIndex("取消")
+                    continue
+                }
+                clickCenterByObj(enterBtn)
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                RrstartStatus = "正常"
+                if (控件信息.私信用户_box) {
+                    let chatBtn = loopResultTextTimer("汪~戳这里打字哦", 5)
+                    // clickCenterByObj(chatBtn)
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    let msg = 控件信息.话术库list[RandomInt(0, 控件信息.话术库list.length - 1)]["data"]
+                    myConsole(msg)
+                    setText(msg)
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    let sendBtns = classNameEndsWith("Button").clickable(true).boundsInside(device.width * 0.5, device.height * 0.8, device.width, device.height).find()
+                    if (sendBtns.length > 0) {
+                        if (sendBtns[0].clickable()) {
+                            sendBtns[0].click()
+                        } else {
+                            clickCenterByObj(sendBtns[0])
+                        }
+                    }
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    // clickCenterByObj(loopResultIdTimer(fullIdPre + "chat_room_single_send", 5))
+                }
+                if (控件信息.发送图片_box) {
+                    loopResultIdTimer(fullIdPre + "kf", 3)
+                    let imageBtns = id(fullIdPre + "kf").visibleToUser(true).find()
+                    if (imageBtns.length >= 1) {
+                        let imageBtn = imageBtns[0]
+                        if (imageBtn) {
+                            imageBtn.click()
+                        } else {
+                            clickCenterByObj(imageBtn)
+                        }
+                    } else {
+                        myConsole("id: " + 日志脱敏值(idStr) + "点击图片失败")
+                        backIndex("取消")
+                        continue
+                    }
+                    let image_poses = 控件信息.图片位置.split(",").filter((Value) => {
+                        return parseInt(Value) > 0 && parseInt(Value) < 10;
+                    });
+                    loopResultIdTimer(fullIdPre + "c0p")
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    let imageSeles = id(fullIdPre + "c0p").visibleToUser(true).find()
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    toastLog("当前图片选择位置" + image_poses)
+                    console.log(image_poses)
+                    if (imageSeles.length >= image_poses.length) {
+                        image_poses.forEach(pos => {
+                            RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                            // console.log(imageSeles[aimPos])
+                            let aimPos = parseInt(pos) - 1
+                            if (imageSeles[aimPos].clickable()) {
+                                imageSeles[aimPos].click()
+                            } else {
+                                clickCenterByObj(imageSeles[aimPos])
+                            }
+                        })
+                    }
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    clickCenterByObj(loopResultTextTimer("原图", 3))
+                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    clickCenterByObj(loopResultIdTimer(fullIdPre + "c86", 3))
+                }
+                timer++
+                let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
+                toastLog("等待" + sleepTime + "秒")
+                sleep(sleepTime * 1000)
+                backIndex("取消")
+            }
+            myConsole("页数比较: " + page + ":" + res.data.total_pages)
+            if (parseInt(page) === parseInt(res.data.total_pages)) {
+                myConsole("达到最大页数" + page)
+                break
+            } else {
+                page++
+                dateStorage.put("page", page)
+                myConsole("页数+1：" + page)
+            }
+        } else {
+            toastLog(res.msg + "60秒后重试")
+            sleep(60 * 1000)
+        }
+    }
+}
+
+function LanBan_idTask() {
+    toastLog("寻找首页中...")
+    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+    if (loopResultTextTimer("输入昵称/ID", 5)) {
+        console.log("已经在ID搜索页")
+    } else {
+        backIndex("首页")
+        sleep(2000)
+        clickCenterByObj(loopResultTextTimer("首页", 3))
+        sleep(2000)
+        let searchBtn = loopResultIdTimer(fullIdPre + "ll_home_top_search", 3)
+        console.log("点击搜索")
+        if (searchBtn && searchBtn.clickable()) {
+            searchBtn.click()
+        } else {
+            clickCenterByObj(searchBtn)
+        }
+    }
+
+    let timer = 0
+    while (1) {
+        let res = threadRunOne(getIds, within)
+        if (res.hasOwnProperty("code") && res.data.data.length > 0) {
+            toastLog("获取到" + res.data.data.length + "条ID数据 还有很多条")
+            for (let i = 0; i < res.data.data.length; i++) {
+                // 开始
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (res.hasOwnProperty("type") && res["type"] == "local_id") {
+                    idStr = res.data.data[i]
+                } else {
+                    if (timer >= parseInt(控件信息.操作阈值)) {
+                        toastLog("达到操作阈值，任务停止...")
+                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        return
+                    }
+                    let sex = judgeSex()
+                    let jsonData = JSON.parse(res.data.data[i]["content"])
+                    // console.log("当前数据:" + JSON.stringify(jsonData))
+                    if (sex !== "") {
+                        console.log("进入性别判断")
+                        if (jsonData["gender_text"] !== sex) {
+                            myConsole("性别" + jsonData["gender_text"] + "不符合")
+                            continue
+                        }
+                    }
+                    let isAnchor = judgIsAnchor()
+                    if (isAnchor !== "" && jsonData["is_anchor"] !== null) {
+                        console.log("进入主播判断")
+                        if (jsonData["is_anchor"] !== isAnchor) {
+                            myConsole("模特" + jsonData["is_anchor"] + "不符合")
+                            continue
+                        }
+                    }
+                    let moneyValue = jsonData["value"]
+                    if (控件信息.消费范围_box) {
+                        console.log("进入消费范围判断")
+                        let isOk = judgMoneyValue(moneyValue)
+                        if (!isOk) {
+                            myConsole("消费范围" + moneyValue + "不符合")
+                            continue
+                        }
+                    }
+                    idStr = getIdReg(res.data.data[i]["content"])
+                    if (!idStr) {
+                        myConsole("ID解析失败 content_length=" + String(res.data.data[i]["content"] || "").length + ", result=" + 日志脱敏值(idStr))
+                        continue
+                    }
+                }
+                if (控件信息.重复不写_box) {
+                    if (long_cache.indexOf(idStr) != -1) {
+                        myConsole("long_cache idStr: " + 日志脱敏值(idStr) + "已存在缓存")
+                        continue
+                    }
+                } else {
+                    if (cache.indexOf(idStr) != -1) {
+                        myConsole("idStr: " + 日志脱敏值(idStr) + "已存在缓存")
+                        continue
+                    }
+                }
+                toastLog("开始ID: " + 日志脱敏值(idStr)) // text("搜索用户ID/房间ID")
+                cache.push(idStr)
+                dateStorage.put("cache", cache)
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                // let inputBar = loopResultTextTimer("搜索用户，房间", 5)
+                let inputBar = loopResultIdTimer(fullIdPre + "searchRoomActivity_searchEditText", 3)
+                if (inputBar) {
+                    if (inputBar.clickable()) {
+                        inputBar.click()
+                    } else {
+                        clickCenterByObj(inputBar)
+                    }
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                setText(idStr.trim())
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (控件信息.搜索坐标_box) {
+                    toastLog("点击坐标: x" + 控件信息.搜索位置X + ",y" + 控件信息.搜索位置Y)
+                    if (parseInt(控件信息.搜索位置X) > 0 && parseInt(控件信息.搜索位置Y) > 0) {
+                        click(parseInt(控件信息.搜索位置X), parseInt(控件信息.搜索位置Y))
+                    }
+                } else {
+                    toastLog("自动回车")
+                    pressOk()
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let aimUser = loopResultTextTimer("用户", 5)
+                if (!aimUser) {
+                    myConsole("idStr: " + 日志脱敏值(idStr) + "无效ID")
+                    clickCenterByObj(loopResultTextTimer("取消", 3))
+                    continue
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (aimUser) {
+                    if (aimUser.clickable()) {
+                        aimUser.click()
+                    } else {
+                        clickCenterByObj(aimUser)
+                    }
+                }
+
+                let userBtn = loopResultIdTimer(fullIdPre + "SearchUserItem_idTextView", 3)
+                if (userBtn) {
+                    if (userBtn.clickable()) {
+                        userBtn.click()
+                    } else {
+                        clickCenterByObj(userBtn)
+                    }
+                } else {
+                    myConsole("idStr: " + 日志脱敏值(idStr) + "无效ID")
+                    // clickCenterByObj(loopResultTextTimer("取消", 3))
+                    continue
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                clickCenterByObj(loopResultTextTimer("打招呼", 5))
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                RrstartStatus = "正常"
+                if (控件信息.私信用户_box) {
+                    let chatBtn = loopResultTextTimer("请输入消息...", 3)
+                    // clickCenterByObj(chatBtn)
+                    let msg = 控件信息.话术库list[RandomInt(0, 控件信息.话术库list.length - 1)]["data"]
+                    myConsole(msg)
+                    let msgs = msg.split("|")
+                    msgs.forEach(itemMsg => {
+                        setText(itemMsg)
+                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        let sendBtn = loopResultTextTimer("发送", 3)
+                        if (sendBtn.clickable()) {
+                            sendBtn.click()
+                        } else {
+                            clickCenterByObj(sendBtn)
+                        }
+                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    })
+                }
+                // if (控件信息.发送图片_box) {
+                //     loopResultIdTimer(fullIdPre + "more_btn", 3)
+                //     // let imageBtn = className("android.widget.FrameLayout").boundsInside(device.width * 0.8, device.height * 0.9, device.width, device.height).findOnce()
+                //     // clickCenterByObj(imageBtn)
+                //     let imageBtn2 = loopResultTextTimer("图片", 3)
+                //     clickCenterByObj(imageBtn2)
+                //     let image_poses = 控件信息.图片位置.split(",").filter((Value) => {
+                //         return parseInt(Value) > 0 && parseInt(Value) < 10;
+                //     });
+                //     loopResultTextTimer("选择图片")
+                //     randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                //     let imageSeles = className("android.widget.FrameLayout").depth(6).clickable(true).visibleToUser(true).find()
+                //     randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                //     toastLog("当前图片选择位置" + image_poses)
+                //     console.log(image_poses)
+                //     if (imageSeles.length >= image_poses.length) {
+                //         image_poses.forEach(pos => {
+                //             randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                //             // console.log(imageSeles[aimPos])
+                //             let aimPos = parseInt(pos) - 1
+                //             if (imageSeles[aimPos].clickable()) {
+                //                 imageSeles[aimPos].click()
+                //             } else {
+                //                 clickCenterByObj(imageSeles[aimPos])
+                //             }
+                //             randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                //         })
+                //     }
+                //     randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                //     clickCenterByObj(loopResultTextTimer("下一步", 3))
+                // }
+                timer++
+                let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
+                toastLog("等待" + sleepTime + "秒")
+                sleep(sleepTime * 1000)
+                backIndex("取消")
+            }
+            myConsole("页数比较: " + page + ":" + res.data.total_pages)
+            if (parseInt(page) === parseInt(res.data.total_pages)) {
+                myConsole("达到最大页数" + page)
+                break
+            } else {
+                page++
+                dateStorage.put("page", page)
+                myConsole("页数+1：" + page)
+            }
+        } else {
+            toastLog(res.msg + "60秒后重试")
+            sleep(60 * 1000)
+        }
+    }
+}
+
+function PP_idTask() {
+    toastLog("寻找首页中...")
+    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+    if (loopResultTextTimer("搜索主播昵称或ID", 5)) {
+        console.log("已经在ID搜索页")
+    } else {
+        backIndex("首页")
+        sleep(2000)
+        clickCenterByObj(loopResultTextTimer("首页", 3))
+        sleep(2000)
+        let searchBtn = id(fullIdPre + "arg").className("android.widget.TextView").clickable(true).boundsInside(device.width * 0.8, 0, device.width, device.height * 0.1).findOnce()
+        console.log("点击搜索")
+        if (searchBtn && searchBtn.clickable()) {
+            searchBtn.click()
+        } else {
+            clickCenterByObj(searchBtn)
+        }
+    }
+
+    let timer = 0
+    while (1) {
+        let res = threadRunOne(getIds, within)
+        if (res.hasOwnProperty("code") && res.data.data.length > 0) {
+            toastLog("获取到" + res.data.data.length + "条ID数据 还有很多条")
+            for (let i = 0; i < res.data.data.length; i++) {
+                // 开始
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (res.hasOwnProperty("type") && res["type"] == "local_id") {
+                    idStr = res.data.data[i]
+                } else {
+                    if (timer >= parseInt(控件信息.操作阈值)) {
+                        toastLog("达到操作阈值，任务停止...")
+                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        return
+                    }
+                    let sex = judgeSex()
+                    let jsonData = JSON.parse(res.data.data[i]["content"])
+                    // console.log("当前数据:" + JSON.stringify(jsonData))
+                    if (sex !== "") {
+                        console.log("进入性别判断")
+                        if (jsonData["gender_text"] !== sex) {
+                            myConsole("性别" + jsonData["gender_text"] + "不符合")
+                            continue
+                        }
+                    }
+                    let isAnchor = judgIsAnchor()
+                    if (isAnchor !== "" && jsonData["is_anchor"] !== null) {
+                        console.log("进入主播判断")
+                        if (jsonData["is_anchor"] !== isAnchor) {
+                            myConsole("模特" + jsonData["is_anchor"] + "不符合")
+                            continue
+                        }
+                    }
+                    let moneyValue = jsonData["value"]
+                    if (控件信息.消费范围_box) {
+                        console.log("进入消费范围判断")
+                        let isOk = judgMoneyValue(moneyValue)
+                        if (!isOk) {
+                            myConsole("消费范围" + moneyValue + "不符合")
+                            continue
+                        }
+                    }
+                    idStr = getIdReg(res.data.data[i]["content"])
+                    if (!idStr) {
+                        myConsole("ID解析失败 content_length=" + String(res.data.data[i]["content"] || "").length + ", result=" + 日志脱敏值(idStr))
+                        continue
+                    }
+                }
+                if (控件信息.重复不写_box) {
+                    if (long_cache.indexOf(idStr) != -1) {
+                        myConsole("long_cache idStr: " + 日志脱敏值(idStr) + "已存在缓存")
+                        continue
+                    }
+                } else {
+                    if (cache.indexOf(idStr) != -1) {
+                        myConsole("idStr: " + 日志脱敏值(idStr) + "已存在缓存")
+                        continue
+                    }
+                }
+                toastLog("开始ID: " + 日志脱敏值(idStr)) // text("搜索用户ID/房间ID")
+                cache.push(idStr)
+                dateStorage.put("cache", cache)
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                // let inputBar = loopResultTextTimer("搜索用户，房间", 5)
+                let inputBar = className("android.widget.EditText").clickable(true).findOnce()
+                if (inputBar) {
+                    if (inputBar.clickable()) {
+                        inputBar.click()
+                    } else {
+                        clickCenterByObj(inputBar)
+                    }
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                setText(idStr.trim())
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (控件信息.搜索坐标_box) {
+                    toastLog("点击坐标: x" + 控件信息.搜索位置X + ",y" + 控件信息.搜索位置Y)
+                    if (parseInt(控件信息.搜索位置X) > 0 && parseInt(控件信息.搜索位置Y) > 0) {
+                        click(parseInt(控件信息.搜索位置X), parseInt(控件信息.搜索位置Y))
+                    }
+                } else {
+                    toastLog("自动回车")
+                    pressOk()
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let aimUser = loopResultTextTimer("用户", 5)
+                if (!aimUser) {
+                    myConsole("idStr: " + 日志脱敏值(idStr) + "无效ID")
+                    clickCenterByObj(loopResultTextTimer("取消", 3))
+                    continue
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (aimUser) {
+                    if (aimUser.clickable()) {
+                        aimUser.click()
+                    } else {
+                        clickCenterByObj(aimUser)
+                    }
+                }
+
+                let userBtn = loopResultTextTimer("ID:" + idStr, 5)
+                if (userBtn) {
+                    if (userBtn.clickable()) {
+                        userBtn.click()
+                    } else {
+                        clickCenterByObj(userBtn)
+                    }
+                } else {
+                    myConsole("idStr: " + 日志脱敏值(idStr) + "无效ID")
+                    // clickCenterByObj(loopResultTextTimer("取消", 3))
+                    continue
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                clickCenterByObj(loopResultTextTimer("聊一聊", 5))
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                RrstartStatus = "正常"
+                if (控件信息.私信用户_box) {
+                    let chatBtn = loopResultTextTimer("请输入消息...", 3)
+                    // clickCenterByObj(chatBtn)
+                    let msg = 控件信息.话术库list[RandomInt(0, 控件信息.话术库list.length - 1)]["data"]
+                    myConsole(msg)
+                    let msgs = msg.split("|")
+                    msgs.forEach(itemMsg => {
+                        setText(itemMsg)
+                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        let sendBtn = loopResultTextTimer("发送", 3)
+                        if (sendBtn.clickable()) {
+                            sendBtn.click()
+                        } else {
+                            clickCenterByObj(sendBtn)
+                        }
+                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    })
+                }
+                if (控件信息.发送图片_box) {
+                    loopResultIdTimer(fullIdPre + "m7", 2)
+                    let imageBtn = className("android.widget.FrameLayout").boundsInside(device.width * 0.8, device.height * 0.9, device.width, device.height).findOnce()
+                    clickCenterByObj(imageBtn)
+                    let imageBtn2 = loopResultTextTimer("照片", 3)
+                    clickCenterByObj(imageBtn2)
+                    let image_poses = 控件信息.图片位置.split(",").filter((Value) => {
+                        return parseInt(Value) > 0 && parseInt(Value) < 10;
+                    });
+                    loopResultTextTimer("选择图片")
+                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    let imageSeles = className("android.widget.FrameLayout").depth(6).clickable(true).visibleToUser(true).find()
+                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    toastLog("当前图片选择位置" + image_poses)
+                    console.log(image_poses)
+                    if (imageSeles.length >= image_poses.length) {
+                        image_poses.forEach(pos => {
+                            randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                            // console.log(imageSeles[aimPos])
+                            let aimPos = parseInt(pos) - 1
+                            if (imageSeles[aimPos].clickable()) {
+                                imageSeles[aimPos].click()
+                            } else {
+                                clickCenterByObj(imageSeles[aimPos])
+                            }
+                            randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        })
+                    }
+                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    clickCenterByObj(loopResultTextTimer("下一步", 3))
+                }
+                timer++
+                let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
+                toastLog("等待" + sleepTime + "秒")
+                sleep(sleepTime * 1000)
+                backIndex("取消")
+            }
+            myConsole("页数比较: " + page + ":" + res.data.total_pages)
+            if (parseInt(page) === parseInt(res.data.total_pages)) {
+                myConsole("达到最大页数" + page)
+                break
+            } else {
+                page++
+                dateStorage.put("page", page)
+                myConsole("页数+1：" + page)
+            }
+        } else {
+            toastLog(res.msg + "60秒后重试")
+            sleep(60 * 1000)
+        }
+    }
+}
+
+function miya_idTask() {
+    toastLog("寻找首页中...")
+    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+    if (!loopResultIdTimer(fullIdPre + "edit", 5)) {
+        backIndexId(fullIdPre + "iv_search")
+        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+        clickCenterByObj(loopResultIdTimer(fullIdPre + "iv_search", 8))
+    }
+    let timer = 0
+
+    while (1) {
+        let res = threadRunOne(getIds, within)
+        if (res.hasOwnProperty("code") && res.data.data.length > 0) {
+            toastLog("获取到" + res.data.data.length + "条ID数据")
+            for (let i = 0; i < res.data.data.length; i++) {
+                // 开始
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let idStr
+                if (res.hasOwnProperty("type") && res["type"] == "local_id") {
+                    idStr = res.data.data[i]
+                } else {
+                    if (timer >= parseInt(控件信息.操作阈值)) {
+                        toastLog("达到操作阈值，任务停止...")
+                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        return
+                    }
+                    let sex = judgeSex()
+                    let jsonData = JSON.parse(res.data.data[i]["content"])
+                    // console.log("当前数据:" + JSON.stringify(jsonData))
+                    if (sex !== "") {
+                        console.log("进入性别判断")
+                        if (jsonData["gender_text"] !== sex) {
+                            myConsole("性别" + jsonData["gender_text"] + "不符合")
+                            continue
+                        }
+                    }
+                    let isAnchor = judgIsAnchor()
+                    if (isAnchor !== "" && jsonData["is_anchor"] !== null) {
+                        console.log("进入主播判断")
+                        if (jsonData["is_anchor"] !== isAnchor) {
+                            myConsole("模特" + jsonData["is_anchor"] + "不符合")
+                            continue
+                        }
+                    }
+                    let moneyValue = jsonData["value"]
+                    if (控件信息.消费范围_box) {
+                        console.log("进入消费范围判断")
+                        let isOk = judgMoneyValue(moneyValue)
+                        if (!isOk) {
+                            myConsole("消费范围" + moneyValue + "不符合")
+                            continue
+                        }
+                    }
+                    idStr = getIdReg(res.data.data[i]["content"])
+                    if (!idStr) {
+                        myConsole("ID解析失败 content_length=" + String(res.data.data[i]["content"] || "").length + ", result=" + 日志脱敏值(idStr))
+                        continue
+                    }
+                }
+                if (控件信息.重复不写_box) {
+                    if (long_cache.indexOf(idStr) != -1) {
+                        myConsole("long_cache idStr: " + 日志脱敏值(idStr) + "已存在缓存")
+                        continue
+                    }
+                } else {
+                    if (cache.indexOf(idStr) != -1) {
+                        myConsole("idStr: " + 日志脱敏值(idStr) + "已存在缓存")
+                        continue
+                    }
+                }
+
+                toastLog("开始ID: " + 日志脱敏值(idStr)) // text("搜索用户ID/房间ID")
+                long_cache.push(idStr)
+                dateStorage.put("long_cache", long_cache)
+
+                cache.push(idStr)
+                dateStorage.put("cache", cache)
+
+                let inputBar = loopResultIdTimer(fullIdPre + "edit", 5)
+                if (inputBar) {
+                    if (inputBar.clickable()) {
+                        inputBar.click()
+                    } else {
+                        clickCenterByObj(inputBar)
+                    }
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                setText(idStr.trim())
+                toastLog("等待搜索结果")
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (控件信息.搜索坐标_box) {
+                    toastLog("点击坐标: x" + 控件信息.搜索位置X + ",y" + 控件信息.搜索位置Y)
+                    if (parseInt(控件信息.搜索位置X) > 0 && parseInt(控件信息.搜索位置Y) > 0) {
+                        click(parseInt(控件信息.搜索位置X), parseInt(控件信息.搜索位置Y))
+                        RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    }
+                } else {
+                    toastLog("自动回车")
+                    pressOk()
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let userID = loopResultIdTimer(fullIdPre + "tv_username", 5)
+                // let userIDs = text("ID: 22739121").visibleToUser(true).find()
+                if (!userID) {
+                    myConsole("id: " + 日志脱敏值(idStr) + "没有搜到")
+                    continue
+                }
+
+                clickCenterByObj(userID)
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let goChat = loopResultTextTimer("聊天", 5)
+                if (!goChat) {
+                    myConsole("id: " + 日志脱敏值(idStr) + "没有按钮")
+                    continue
+                } else {
+                    clickCenterByObj(goChat)
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                RrstartStatus = "正常"
+                if (控件信息.发送图片_box) {
+                    let imageBtn = loopResultIdTimer(fullIdPre + "chat_btn_album", 3)
+                    if (imageBtn && imageBtn.clickable()) {
+                        imageBtn.click()
+                    } else {
+                        clickCenterByObj(imageBtn)
+                    }
+                    let image_poses = 控件信息.图片位置.split(",").filter((Value) => {
+                        return parseInt(Value) > 0 && parseInt(Value) < 10;
+                    });
+                    loopResultIdTimer(fullIdPre + "select_frame")
+                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    let imageSeles = id(fullIdPre + "select_frame").visibleToUser(true).find()
+                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    toastLog("当前图片选择位置" + image_poses)
+                    console.log(image_poses)
+                    if (imageSeles.length >= image_poses.length) {
+                        image_poses.forEach(pos => {
+                            // sleep(actionSpeed)
+                            // console.log(imageSeles[aimPos])
+                            let aimPos = parseInt(pos) - 1
+                            if (imageSeles[aimPos].clickable()) {
+                                imageSeles[aimPos].click()
+                            } else {
+                                clickCenterByObj(imageSeles[aimPos])
+                            }
+                        })
+                    }
+                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    clickCenterByObj(loopResultIdTimer(fullIdPre + "tv_complete", 3))
+                }
+                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                if (控件信息.私信用户_box) {
+                    let msg = 控件信息.话术库list[RandomInt(0, 控件信息.话术库list.length - 1)]["data"]
+                    myConsole(msg)
+                    let msgs = msg.split("|")
+                    msgs.forEach(itemMsg => {
+                        setText(itemMsg)
+                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        clickCenterByObj(loopResultIdTimer(fullIdPre + "chat_send_button", 5))
+                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    })
+                }
+                let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
+                toastLog("等待" + sleepTime + "秒")
+                sleep(sleepTime * 1000)
+                backIndexId(fullIdPre + "edit")
+            }
+            myConsole("页数比较: " + page + ":" + res.data.total_pages)
+            if (parseInt(page) === parseInt(res.data.total_pages)) {
+                myConsole("达到最大页数" + page)
+                sleep(3000)
+                continue
+            } else {
+                page++
+                dateStorage.put("page", page)
+                myConsole("页数+1：" + page)
+            }
+        } else {
+            toastLog(res.msg + "60秒后重试")
+            sleep(60 * 1000)
+        }
+    }
+}
+
+function judgeSex() {
+    let sex = ""
+    if (控件信息.写男_box == true && 控件信息.写女_box == true) {
+        sex = ""
+    } else if (控件信息.写男_box == true && 控件信息.写女_box == false) {
+        sex = "男"
+    } else if (控件信息.写男_box == false && 控件信息.写女_box == true) {
+        sex = "女"
+    } else {
+        sex = ""
+    }
+    console.log("返回性别：" + sex)
+    return sex
+}
+
+function judgIsAnchor() {
+    let isAnchor = ""
+    if (控件信息.过滤男模_box == true && 控件信息.过滤女模_box == true) {
+        isAnchor = false
+    } else if (控件信息.过滤男模_box == true && 控件信息.过滤女模_box == false) {
+        isAnchor = true
+    } else if (控件信息.写男_box == false && 控件信息.写女_box == true) {
+        isAnchor = true
+    } else {
+        isAnchor = ""
+    }
+    console.log("返回isAnchor：" + isAnchor)
+    return isAnchor
+}
+
+function judgMoneyValue(moneyValue) {
+    let isOk = false
+    if (parseInt(moneyValue) >= parseInt(控件信息.消费最低) && parseInt(moneyValue) < parseInt(控件信息.消费最高)) {
+        isOk = true
+    } else {
+        isOk = false
+    }
+    console.log("返回 消费范围判断：" + isOk)
+    return isOk
+}
+
+function adjustIndex(platForms, aimStr) {
+    platForms = platForms.split("|")
+    for (let i = 0; i < platForms.length; i++) {
+        if (platForms[i] == aimStr) {
+            platForms.splice(i, 1)
+
+        }
+    }
+    platForms.unshift(aimStr)
+    return platForms.join("|")
+}
+
+function pressOk() {
+    let result = { "code": -1 }
+    try {
+        result = shell("input keyevent 66", true)
+    } catch (error) {
+        console.log("回车异常")
+        return false
+    }
+    if (result.code == 0) {
+        console.log("回车成功")
+        return true
+    } else {
+        console.log("回车失败")
+    }
+    return false
+}
+
+function RandomInt(min, max) {
+    min = parseInt(min)
+    max = parseInt(max)
+    return Math.round(Math.random() * (max - min)) + min;
+}
+
+function loopResultIdTimer(aimId, timer) {
+    while (timer--) {
+        console.log('寻找' + aimId + "...")
+        let aim = id(aimId).visibleToUser(true).findOnce()
+        if (aim) {
+            console.log('已经找到' + aimId)
+            return aim
+        }
+        slp()
+    }
+    return false
+}
+
+function backIndexId(indexDesc) {
+    while (1) {
+        console.log("寻找ID" + indexDesc)
+        if (id(indexDesc).visibleToUser(true).findOnce()) {
+            break
+        } else {
+            back()
+            sleep(1500)
+        }
+    }
+    // toastLog('已经返回到' + indexDesc)
+}
+
+function slp(sleepTime) {
+    if (sleepTime == null) {
+        sleep(1000)
+    } else {
+        sleep(sleepTime)
+    }
+}
+
+function loopResultTextTimer(aimText, timer) {
+    while (timer--) {
+        console.log("寻找Text: " + aimText)
+        let aim = text(aimText).visibleToUser(true).findOnce()
+        if (aim) {
+            sleep(500)
+            console.log('已经找到' + aimText)
+            return aim
+        }
+        sleep(1000)
+    }
+    return false
+}
+
+function backIndex(indexDesc) {
+    while (1) {
+        console.log("寻找" + indexDesc)
+        if (text(indexDesc).visibleToUser(true).findOnce()) {
+            break
+        } else {
+            back()
+            sleep(1500)
+        }
+    }
+    // toastLog('已经返回到' + indexDesc)
+}
+
+function clickCenterByObj(objDec) {
+    if (objDec) {
+        // 获取x，y坐标
+        let x = objDec.bounds().centerX()
+        let y = objDec.bounds().centerY()
+        click(x, y)
+        sleep(500)
+    }
+}
+
+function getIds() {
+    if (!isCheckedLocal) {
+        if (控件信息.本地ID库list.length > 0) {
+            let idArray = []
+            for (let i = 0; i < 控件信息.本地ID库list.length; i++) {
+                idArray = idArray.concat(控件信息.本地ID库list[i]["data"].trim().split("\n"))
+            }
+            isCheckedLocal = true
+            return {
+                "code": 0,
+                "data": {
+                    "data": idArray,
+                    "total_pages": page
+                },
+                "type": "local_id"
+            }
+        }
+    }
+
+    let safeLimit = Math.min(Math.max(parseInt(page_size) || 100, 1), 500)
+    let candidatePaths = FETCH_API_CONFIG.paths || ["/fetch/by-table"]
+    let lastErrorMsg = "取数失败"
+
+    for (let i = 0; i < candidatePaths.length; i++) {
+        let signed = 构建取数URL(candidatePaths[i], idType, within, safeLimit)
+        记录自动化日志("fetch.byTable.request", 构建取数请求摘要(signed, idType, within, safeLimit, i + 1), "INFO")
+
+        try {
+            let res = http.get(signed.url)
+            let rawBody = res.body.string()
+            记录自动化日志("fetch.byTable.response", 构建取数响应摘要(rawBody, res.statusCode, signed.path, i + 1), res.statusCode == 200 ? "INFO" : "ERROR")
+
+            if (res.statusCode == 404) {
+                lastErrorMsg = rawBody || "404 Not Found"
+                记录自动化日志("fetch.byTable.routeNotFound", {
+                    attempt: i + 1,
+                    path: signed.path,
+                    nextPath: candidatePaths[i + 1] || null
+                }, "WARN")
+                continue
+            }
+
+            if (res.statusCode == 200) {
+                try {
+                    let parsed = JSON.parse(rawBody)
+                    let compatible = 兼容取数返回(parsed)
+                    记录自动化日志("fetch.byTable.compat", 构建兼容取数摘要(compatible), "DEBUG")
+                    return compatible
+                } catch (parseError) {
+                    记录自动化日志("fetch.byTable.parseError", {
+                        attempt: i + 1,
+                        path: signed.path,
+                        error: String(parseError),
+                        body_length: String(rawBody || "").length,
+                        body_preview: 日志简略文本(rawBody || "", 120)
+                    }, "ERROR")
+                    return {
+                        "code": -2,
+                        "msg": "返回解析失败",
+                        "data": {
+                            "data": [],
+                            "total_pages": page
+                        }
+                    }
+                }
+            }
+
+            lastErrorMsg = rawBody || "取数失败"
+            return {
+                "code": res.statusCode,
+                "msg": lastErrorMsg,
+                "data": {
+                    "data": [],
+                    "total_pages": page
+                }
+            }
+        } catch (error) {
+            lastErrorMsg = String(error)
+            记录自动化日志("fetch.byTable.error", {
+                attempt: i + 1,
+                path: signed.path,
+                error: lastErrorMsg
+            }, "ERROR")
+        }
+    }
+
+    记录自动化日志("fetch.byTable.allRoutesFailed", {
+        baseUrl: FETCH_API_CONFIG.baseUrl,
+        path_count: candidatePaths.length,
+        paths: candidatePaths,
+        lastErrorMsg: 日志简略文本(lastErrorMsg || "", 120)
+    }, "ERROR")
+    return {
+        "code": -1,
+        "msg": lastErrorMsg || "网络异常",
+        "data": {
+            "data": [],
+            "total_pages": page
+        }
+    }
+}
+
+function getIdReg(s) {
+    try {
+        let jsonData = JSON.parse(s)
+        if (jsonData.hasOwnProperty("uid")) {
+            console.log("格式化的数据")
+            return jsonData["uid"]
+        }
+    } catch (error) {
+        const regex = /(\d{10})/;
+        const match = s.match(regex);
+
+        if (match) {
+            const id = match[1];
+            return id
+        } else {
+            return ""
+        }
+    }
+
+}
+
+function threadRunOne(callback, one) {
+    let res
+    let threada = threads.start(function () {
+        res = callback(one)
+    })
+    threada.join()
+    return res
+}
+
+// ==================== 启动入口调用 ====================
+启动入口();
+
+// ==================== 基础模块与公共组件 ====================
+
+function getCurrentDate() {
+    const now = new Date();
+
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+}
+
+function javaClass() {
+    importClass("androidx.core.graphics.drawable.DrawableCompat")
+    importClass(android.graphics.Color);
+    importClass(android.graphics.drawable.GradientDrawable);
+    importClass(android.text.Spannable);
+    importClass(android.text.SpannableStringBuilder);
+    importClass(android.text.style.ForegroundColorSpan);
+    importClass(android.graphics.LinearGradient);
+    importClass(android.graphics.Shader);
+    importClass(android.graphics.Bitmap);
+    importClass("android.graphics.BitmapFactory");
+    importClass(android.graphics.BitmapShader);
+    importClass(android.view.View);
+    importClass(javax.crypto.Mac);
+    importClass(javax.crypto.spec.SecretKeySpec);
+}
+
+function UI_layout_module() {
+    brdcrLayout = (function () {
+        util.extend(brdcrLayout, ui.Widget);
+        function brdcrLayout() {
+            ui.Widget.call(this);
+            this.defineAttr("id", (view, attr, value, defineSetter) => {
+                ui[value.replace("@+id/", "")] = view;
+                value = value.replace("@+id/", "");
+            });
+
+            this.defineAttr("title", (view, attr, value, defineSetter) => {
+                view._标题.attr('w', '-2');
+                view._标题.setText(value || "");
+            });
+
+            this.defineAttr("foid", (view, attr, value, defineSetter) => {
+                if (value == 'true') {
+                    BgPadding(view, '#D4D4D4');
+                    view._标题layout.attr('h', '40dp');
+                    view._标题layout.parent.attr('h', '-2');
+                    view._折叠.attr("src", "ic_keyboard_arrow_up_black_48dp");
+                    view._标题layout.on("click", () => {
+                        if (view._标题layout.parent.attr('h') == '40dp') {
+                            view._标题layout.parent.attr('h', '-2');
+                            view._折叠.attr("src", "ic_keyboard_arrow_up_black_48dp");
+                            BgPadding(view, '#000000');
+                        } else {
+                            view._标题layout.parent.attr('h', '40dp')
+                            view._折叠.attr("src", "ic_keyboard_arrow_down_black_48dp");
+                            BgPadding(view, '#D4D4D4');
+                        }
+                    });
+                } else {
+                    BgPadding(view, '#000000');
+                }
+            });
+
+            this.defineAttr("check", (view, attr, value, defineSetter) => {
+                view._box.attr('w', '-2');
+                view._box.checked = 控件信息[value] || false;
+                view._box.on("check", function (checked) {
+                    控件信息[value] = checked;
+                });
+            });
+
+        };
+
+        brdcrLayout.prototype.render = function () {
+            return (
+                <vertical w="*" h="auto" id='_布局layout' gravity="center_vertical">
+                    <vertical w="*" h="0" id='_标题layout' gravity="center_vertical" >
+                        <horizontal w='*' h='*' gravity="center_vertical"  >
+                            <img id='_折叠' w="25dp" h="25dp" src="ic_keyboard_arrow_down_black_48dp" scaleType="fitEnd" tint="#D3D3D3" />
+                            <text id='_标题' h="auto" w='0' textColor="#000000" textSize="18sp" layout_weight="1" marginLeft="8dp"></text>
+                            <Switch id="_box" w="0" h="*" text='' textSize="15sp" />
+                        </horizontal>
+                        <frame w="*" h="1dp" bg='#EEEEEE' padding='0dp 5dp' />
+                    </vertical>
+                </vertical>
+            );
+        };
+
+        brdcrLayout.prototype.setchecked = function (value) {
+            return this.view._box.checked = value;
+        };
+
+        brdcrLayout.prototype.onClick = function (value) {
+            return this.view._box.click(value)
+        };
+
+        ui.registerWidget("brdcr-layout", brdcrLayout);
+        return brdcrLayout;
+    })();
+
+    inputLayout = (function () {
+        util.extend(inputLayout, ui.Widget);
+        function inputLayout() {
+            ui.Widget.call(this);
+            this.defineAttr("id", (view, attr, value, defineSetter) => {
+                ui[value.replace("@+id/", "")] = view;
+                value = value.replace("@+id/", "");
+                BgPadding(view, '#03A9F4');
+                view._input.addTextChangedListener(new android.text.TextWatcher({
+                    afterTextChanged: function (Editable) {
+                        控件信息[value] = String(Editable);
+                    },
+                }));
+            });
+
+            this.defineAttr("hint", (view, attr, value, defineSetter) => {
+                view._input.setHint(value);
+            });
+
+            this.defineAttr("text", (view, attr, value, defineSetter) => {
+                view._input.setText(String(value));
+            });
+
+            this.defineAttr("style", (view, attr, value, defineSetter) => {
+                /*
+                1: 普通文本输入类型。
+                2: 仅数字输入类型。
+                3: 电话号码输入类型。
+                4: 日期和时间输入类型。
+               128: 密码输入类型。
+               129: 显示密码
+               32: 电子邮件地址输入类型。
+               16: URL输入类型。
+               96: 人名输入类型。
+               112:邮政地址输入类型。
+               0: 普通文本输入类型。 */
+                if (value == "number") {
+                    view._input.setInputType(2);
+                } else if (value == "phone") {
+                    view._input.setInputType(3);
+                } else if (value == "password") {
+                    view._input.setInputType(128);
+                } else if (value == "url") {
+                    view._input.setInputType(16);
+                } else if (value == "email") {
+                    view._input.setInputType(32);
+                } else if (value == "text") {
+                    view._input.setInputType(1);
+                }
+            });
+
+        };
+
+        inputLayout.prototype.render = function () {
+            return (
+                <horizontal w="auto" h="auto" gravity='center' >
+                    <EditText h='*' w='*' textColor="#03A9F4" gravity="center" textSize="15sp"
+                        id="_input" text="" hint='' padding='0 -5 0 -5' textColorHint='#DBDBDB' background="#00000000" singleLine="true" />
+                </horizontal >
+            );
+        };
+
+        inputLayout.prototype.getText = function () {
+            return this.view._input.getText();
+        };
+
+        inputLayout.prototype.setText = function (value) {
+            return this.view._input.setText(value);
+        };
+
+        inputLayout.prototype.addTextChangedListener = function (value) {
+            return this.view._input.addTextChangedListener(value);
+        };
+        inputLayout.prototype.setSelection = function (value) {
+            return this.view._input.setSelection(value);
+        };
+
+        ui.registerWidget("input-layout", inputLayout);
+        return inputLayout;
+
+    })();
+
+    kuLayout = (function () {
+        util.extend(kuLayout, ui.Widget);
+        function kuLayout() {
+            ui.Widget.call(this);
+            this.defineAttr("KuType", (view, attr, value, defineSetter) => {
+                view.widget.KuType = value;
+            });
+
+            this.defineAttr("KuName", (view, attr, value, defineSetter) => {
+                view._标题.setText(value);
+            });
+
+            this.defineAttr("Kuid", (view, attr, value, defineSetter) => {
+                BgPadding(view, '#000000');
+                控件信息[value] = 控件信息[value] || [];
+                let json = JSON.stringify(控件信息[value]);
+                let 数量 = json.match(/done\":true/g); if (数量) { 数量 = 数量.length; } else { 数量 = 0; };
+                view._选择情况.setText('已选:' + 数量 + '/' + 控件信息[value].length);
+                view._编辑库.on("click", function () {
+                    console.log('编辑:' + value);
+                    KuUI({
+                        KuName: view.widget.KuName,
+                        type: view.widget.KuType,
+                        view: view,
+                        Kuid: value
+                    })
+                });
+            });
+
+            this.defineAttr("check", (view, attr, value, defineSetter) => {
+                view._check.attr("w", "-1")
+                控件信息[value] = 控件信息[value] || false;
+                view._check.checked = 控件信息[value] || false;
+                view._check.on("check", function (checked) {
+                    console.log(checked);
+                    控件信息[value] = checked;
+                });
+            });
+
+        };
+
+        kuLayout.prototype.render = function () {
+            return (
+                <horizontal w="*" h="*" gravity='center_vertical' padding="8dp 5dp">
+                    <text id='_标题' h="auto" w='auto' textColor="#000000" textSize="16sp" ></text>
+                    <Switch id="_check"
+                        textSize="15sp" textColor="#000000" gravity='center' w="0" h="auto" />
+                    <text id='_选择情况' w="auto" h="auto" textSize="15sp" textColor="#000000"
+                        text="" layout_gravity='center' gravity='center' layout_weight="1" />
+                    <card w="auto" h="*" cardCornerRadius="2dp"
+                        cardBackgroundColor='#03A9F4' cardElevation="0dp"  >
+                        <horizontal id='_编辑库' w="*" h="*" padding="5dp 0dp" gravity='center_vertical'>
+                            <text w="auto" h="auto" textSize="15sp" textColor="#ffffff" text="编辑" />
+                        </horizontal>
+                    </card>
+                </horizontal >
+            );
+        };
+        ui.registerWidget("ku-layout", kuLayout);
+        return kuLayout;
+    })();
+
+    KuUI = function (data) {
+        var dialog = new android.app.AlertDialog.Builder(activity).create()
+        dialog.setView(new android.widget.EditText(context))
+        dialog.show();
+        dialog.setCancelable(true)
+        var window = dialog.getWindow();
+        window.setDimAmount(0.7);
+        var tjjl = ui.inflate(
+            <vertical   >
+                <card cardCornerRadius="0dp"
+                    cardBackgroundColor='#FFFFFF' cardElevation="0dp" >
+                    <vertical h="auto" w='*'>
+                        <frame id='返回' marginTop='10dp' marginBottom='5dp'>
+                            <text id='title' text='' textColor="#333333" textSize="20sp" textStyle="bold" w="auto" h="auto" layout_gravity="center" />
+                            <img w="30dp" h="30dp" src="ic_clear_black_48dp" scaleType="fitEnd" layout_gravity="center|right" marginRight='15dp' tint="#999999" />
+                        </frame>
+                        <horizontal gravity="center_vertical" h='auto'>
+                            <checkbox id="选择" w="auto" h="auto" textColor="#333333" checked="{{this.done}}" />
+                            <text id="选择num" text="null" textColor="#17B9DE" textSize="15sp" />
+                        </horizontal>
+                        <frame w="*" h="1dp" bg='#DEDEDE' margin='0dp 2dp' />
+                        <list id="todoList" h='700px' w='*' >
+                            <vertical h="auto" w='*'>
+                                <horizontal w='*' gravity="center_vertical">
+                                    <checkbox w='auto' id="done" checked="{{this.done}}" />
+                                    <text text="{{this.number}}:" textSize="18sp" textColor="#555555" w='auto' h="auto" />
+                                    <text text="{{this.type}}" textSize="15sp" textColor="#555555" w='auto' h="auto" layout_weight="1" />
+                                    <img id='编辑' w="25dp" h="25dp" tint="#D4D4D4" src="ic_create_black_48dp" scaleType="fitEnd" layout_gravity="center" />
+                                    <img id='删除' w="25dp" h="25dp" tint="#D4D4D4" src="ic_delete_forever_black_48dp" scaleType="fitEnd" layout_gravity="center" />
+                                </horizontal>
+                                <text id="title" text="{{this.data}}" textSize="12sp" textColor="#000000" w='*' h="auto" marginLeft="10dp" maxLines="1" ellipsize='end' singleLine="true" />
+                                <frame w="*" h="1dp" bg='#DEDEDE' margin='0dp 2dp' />
+                            </vertical>
+                        </list>
+                        <img id='Add' w="50dp" h="50dp" src="ic_add_circle_outline_black_48dp" tint="#05C7FF" layout_gravity="right|buttom" />
+                    </vertical>
+                </card>
+            </vertical>
+        )
+        window.setContentView(tjjl);
+        tjjl.title.setText(data.KuName);
+        tjjl.todoList.setDataSource(控件信息[data.Kuid]);
+
+        let json = JSON.stringify(控件信息[data.Kuid]);
+        let 数量 = json.match(/done\":true/g);
+        if (数量) { 数量 = 数量.length; } else { 数量 = 0; };
+        tjjl.选择num.setText('已选:' + 数量 + '/' + 控件信息[data.Kuid].length);
+
+        tjjl.title.attr("w", "-1");
+
+        tjjl.返回.on("click", () => {
+            let json = JSON.stringify(控件信息[data.Kuid]);
+            let 数量 = json.match(/done\":true/g);
+            if (数量) { 数量 = 数量.length; } else { 数量 = 0; };
+            data.view._选择情况.setText('已选:' + 数量 + '/' + 控件信息[data.Kuid].length)
+            dialog.dismiss();
+        })
+
+        tjjl.todoList.on("item_bind", function (itemView, itemHolder) {
+            //绑定勾选框事件
+            itemView.done.on("check", function (checked) {
+                let item = itemHolder.item;
+                item.done = checked;
+                let json = JSON.stringify(控件信息[data.Kuid]);
+                let 数量 = json.match(/done\":true/g);
+                if (数量) { 数量 = 数量.length; } else { 数量 = 0; };
+                tjjl.选择num.setText('已选:' + 数量 + '/' + 控件信息[data.Kuid].length)
+            });
+
+            itemView.编辑.on("click", function () {
+                KuAddUI({
+                    Kuid: data.Kuid,
+                    view: tjjl,
+                    type: data.type,
+                    number: itemHolder.position,
+                })
+            });
+
+            itemView.删除.on("click", function () {
+                var builder = new android.app.AlertDialog.Builder(activity)
+                builder.setTitle("提示：");
+                builder.setMessage("确定要删除?");
+                builder.setIcon(drawable_Id("ic_view_list_black_48dp"));
+                builder.setCancelable(false);
+                //设置正面按钮
+                builder.setPositiveButton("确认", new android.content.DialogInterface.OnClickListener({
+                    onClick: function (dialog, which) {
+                        控件信息[data.Kuid].splice(itemHolder.position, 1);
+                        tjjl.todoList.adapter.notifyDataSetChanged();
+                        let json = JSON.stringify(控件信息[data.Kuid]);
+                        let 数量 = json.match(/done\":true/g);
+                        if (数量) { 数量 = 数量.length; } else { 数量 = 0; };
+                        tjjl.选择num.setText('已选:' + 数量 + '/' + 控件信息[data.Kuid].length)
+                        dialogs.dismiss();
+                        return true;
+                    }
+                }))
+                //设置反面按钮
+                builder.setNegativeButton("取消", new android.content.DialogInterface.OnClickListener({
+                    onClick: function (dialog, which) {
+                        dialogs.dismiss();
+                        return false;
+                    }
+                }))
+                //创建AlertDialog对象
+                dialogs = builder.create();
+                dialogs.show();
+                dialogs.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setTextColor(android.graphics.Color.RED);
+                dialogs.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setTextColor(android.graphics.Color.BLUE);
+            });
+        });
+
+        tjjl.todoList.on("item_click", function (item, i, itemView, listView) {
+            itemView.done.checked = !itemView.done.checked;
+        });
+
+        tjjl.选择.on("check", function (checked) {
+            if (checked) {
+                控件信息[data.Kuid].forEach(item => {
+                    item.done = true;
+                });
+            } else {
+                控件信息[data.Kuid].forEach(item => {
+                    item.done = false;
+                });
+            }
+            tjjl.todoList.adapter.notifyDataSetChanged();
+        });
+
+        tjjl.Add.on("click", () => {
+            // KuType(Kuid, tjjl)
+            KuAddUI({
+                Kuid: data.Kuid,
+                view: tjjl,
+                type: data.type,
+                number: null,
+            })
+        });
+    }
+
+    KuAddUI = function (data) {
+        var dialog1 = new android.app.AlertDialog.Builder(activity).create()
+        dialog1.setView(new android.widget.EditText(context))
+        dialog1.show();
+        dialog1.setCancelable(true)
+        var window = dialog1.getWindow();
+        window.setDimAmount(0.7);
+        var tjjl1 = ui.inflate(
+            <vertical   >
+                <card cardCornerRadius="0dp"
+                    cardBackgroundColor='#FFFFFF' cardElevation="0dp" >
+                    <vertical h="500dp" w='*'>
+                        <frame marginTop='15dp' marginBottom='10dp'>
+                            <text id='title' text='' textColor="#333333" textSize="22sp" textStyle="bold" w="auto" h="auto" layout_gravity="center" />
+                            <img id='返回' w="30dp" h="30dp" src="ic_clear_black_48dp" scaleType="fitEnd" layout_gravity="center|right" marginRight='15dp' tint="#999999" />
+                        </frame>
+
+                        <horizontal w='*' h='25dp' gravity='center_vertical'>
+                            <text textSize="15sp">数据类型：</text>
+                            <spinner w='auto' id="数据类型" gravity="center" textColor="#000000" textSize="15sp" />
+                            <card id='_导入图片' w="0" h="*" cardCornerRadius="2dp"
+                                cardBackgroundColor='#03A9F4' cardElevation="0dp"  >
+                                <horizontal w="*" h="*" padding="5dp 0dp" gravity='center_vertical'>
+                                    <text w="auto" h="auto" textSize="15sp" textColor="#ffffff" text="选择" />
+                                </horizontal>
+                            </card>
+                        </horizontal>
+
+                        <button id='确认添加' h='auto' w='*' style="Widget.AppCompat.Button.Colored" text="确认添加" />
+                        <horizontal h='*' w='*' >
+                            <input bg='#DCDCDC' h='*' w='*' textColor="#000000" textSize="16sp"
+                                id="msg" text="" inputType='textMultiLine|text' gravity="top" />
+                        </horizontal>
+                    </vertical>
+                </card>
+            </vertical>
+        )
+
+        window.setContentView(tjjl1);
+
+        let 当前数据类型 = 0;
+        let typelist = data.type.split("|");
+        adapter = new android.widget.ArrayAdapter(context, android.R.layout.simple_spinner_item, typelist);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        tjjl1.数据类型.setAdapter(adapter);
+
+        tjjl1.数据类型.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener({
+            onItemSelected: function (parent, view, position, id) {
+                当前数据类型 = id;
+                if (typelist[id] == "图片") {
+                    tjjl1.msg.setHint("请填写图片所在设备路径");
+                    tjjl1._导入图片.attr("w", "-2");
+                } else if (typelist[id] == "文字") {
+                    tjjl1.msg.setHint("请填写内容(多条'|'分割)");
+                    tjjl1._导入图片.attr("w", "0");
+                } else if (typelist[id] == "名片") {
+                    tjjl1.msg.setHint("请填写需发送用户名片名(需当前账号已添加)");
+                    tjjl1._导入图片.attr("w", "0");
+                } else if (typelist[id] == "投票") {
+                    tjjl1.msg.setHint("选项请用|符号分割(标题|选项1|选项2|选项3)");
+                    tjjl1._导入图片.attr("w", "0");
+                }
+            }
+        }));
+
+        if (data.number != null) {
+            tjjl1.title.setText('编辑');
+            tjjl1.确认添加.setText('确认修改');
+            tjjl1.msg.setText(控件信息[data.Kuid][data.number].data || '');
+            try {
+                tjjl1.数据类型.setSelection(typelist.indexOf(控件信息[data.Kuid][data.number].type));
+            } catch (error) {
+
+            }
+        } else {
+            tjjl1.title.setText('添加');
+        }
+
+        tjjl1.确认添加.on("click", () => {
+            if (data.number != null) {
+                let msg = String(tjjl1.msg.getText());
+                if (!msg) {
+                    toastLog("添加内容不能为空"); return;
+                }
+                if (typelist[当前数据类型] == '图片') {
+                    if (!files.exists(msg)) {
+                        toastLog("图片路径有误"); return;
+                    }
+                }
+                控件信息[data.Kuid][data.number].type = typelist[当前数据类型];
+                控件信息[data.Kuid][data.number].data = msg;
+            } else {
+                let msg = String(tjjl1.msg.getText());
+                if (!msg) {
+                    toastLog("添加内容不能为空"); return;
+                }
+                if (typelist[当前数据类型] == '图片') {
+                    if (!files.exists(msg)) {
+                        toastLog("图片路径有误"); return;
+                    }
+                }
+                控件信息[data.Kuid].push({
+                    number: 控件信息[data.Kuid].length + 1,
+                    type: typelist[当前数据类型],
+                    data: msg,
+                    done: false
+                });
+                let json = JSON.stringify(控件信息[data.Kuid]);
+                let 数量 = json.match(/done\":true/g);
+                if (数量) { 数量 = 数量.length; } else { 数量 = 0; };
+                data.view.选择num.setText('已选:' + 数量 + '/' + 控件信息[data.Kuid].length);
+            }
+            data.view.todoList.adapter.notifyDataSetChanged();
+            dialog1.dismiss();
+        })
+
+        tjjl1._导入图片.on("click", () => {
+            FileUI('*image/*', tjjl1.msg);
+        });
+
+        tjjl1.返回.on("click", () => {
+            dialog1.dismiss();
+        })
+    };
+
+    FileUI = function (mimeType, view) {
+        var ResultIntent = {
+            intentCallback: {},
+            init: function () {
+                activity.getEventEmitter().on("activity_result", (requestCode, resultCode, data) => {
+                    this.onActivityResult(requestCode, resultCode, data);
+                });
+            },
+            startActivityForResult: function (intent, callback) {
+                var i;
+                for (i = 0; i < 65536; i++) {
+                    if (!(i in this.intentCallback)) break;
+                }
+                if (i >= 65536) {
+                    toast("启动Intent失败：同时请求的Intent过多");
+                    return;
+                }
+                this.intentCallback[i] = callback;
+                activity.startActivityForResult(intent, i);
+            },
+            onActivityResult: function (requestCode, resultCode, data) {
+                var cb = this.intentCallback[requestCode];
+                if (!cb) return;
+                delete this.intentCallback[requestCode];
+                cb(resultCode, data);
+            }
+        };
+        ResultIntent.init();
+        function URIUtils_uriToFile(uri) { //Source : https://www.cnblogs.com/panhouye/archive/2017/04/23/6751710.html
+            var r = null,
+                cursor, column_index, selection = null,
+                selectionArgs = null,
+                isKitKat = android.os.Build.VERSION.SDK_INT >= 19,
+                docs;
+            if (uri.getScheme().equalsIgnoreCase("content")) {
+                if (isKitKat && android.provider.DocumentsContract.isDocumentUri(activity, uri)) {
+                    if (String(uri.getAuthority()) == "com.android.externalstorage.documents") {
+                        docs = String(android.provider.DocumentsContract.getDocumentId(uri)).split(":");
+                        if (docs[0] == "primary") {
+                            return android.os.Environment.getExternalStorageDirectory() + "/" + docs[1];
+                        }
+                    } else if (String(uri.getAuthority()) == "com.android.providers.downloads.documents") {
+                        uri = android.content.ContentUris.withAppendedId(
+                            android.net.Uri.parse("content://downloads/public_downloads"),
+                            parseInt(android.provider.DocumentsContract.getDocumentId(uri))
+                        );
+                    } else if (String(uri.getAuthority()) == "com.android.providers.media.documents") {
+                        docs = String(android.provider.DocumentsContract.getDocumentId(uri)).split(":");
+                        if (docs[0] == "image") {
+                            uri = android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+                        } else if (docs[0] == "video") {
+                            uri = android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
+                        } else if (docs[0] == "audio") {
+                            uri = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+                        }
+                        selection = "_id=?";
+                        selectionArgs = [docs[1]];
+                    }
+                }
+                try {
+                    cursor = activity.getContentResolver().query(uri, ["_data"], selection, selectionArgs, null);
+                    if (cursor && cursor.moveToFirst()) {
+                        r = String(cursor.getString(cursor.getColumnIndexOrThrow("_data")));
+                    }
+                } catch (e) {
+                    log(e)
+                }
+                if (cursor) cursor.close();
+                return r;
+            } else if (uri.getScheme().equalsIgnoreCase("file")) {
+                return String(uri.getPath());
+            }
+            return null;
+        }
+        var i = new android.content.Intent(android.content.Intent.ACTION_GET_CONTENT);
+        i.setType(mimeType);
+        ResultIntent.startActivityForResult(i, function (resultCode, data) {
+            if (resultCode != activity.RESULT_OK) return;
+            var f = URIUtils_uriToFile(data.getData());
+            if (f) {
+                f = f.replace(new RegExp("(/storage/emulated/0/|/mnt/shared/)", "g"), '/sdcard/');
+                if (mimeType == 'text/*') {
+                    if (files.getExtension(f) == "txt") {
+                        ui.run(() => {
+                            view.setText(f);
+                        });
+                    } else {
+                        toastLog('请选择.txt文件');
+                    }
+                } else if (mimeType == '*image/*') {
+                    if (files.getExtension(f) == "png" || files.getExtension(f) == "jpg") {
+                        ui.run(() => {
+                            view.setText(f);
+                        });
+                    } else {
+                        toastLog('请选择.图片文件');
+                    }
+                }
+            } else {
+                toastLog('选择错误,可能是该手机不支持');
+            }
+        });
+    }
+
+    BgRGB = function (orientation, grb) {
+        var colorlist = [];
+        grb.forEach(grb => colorlist.push(colors.parseColor(grb)));
+        return new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation[orientation], colorlist);
+    };
+
+    BgPadding = function (view, color) {
+        gradientDrawable = new GradientDrawable();
+        gradientDrawable.setShape(GradientDrawable.RECTANGLE);
+        gradientDrawable.setColor(colors.parseColor("#FFFFFF"));
+        gradientDrawable.setStroke(5, colors.parseColor(color));
+        // gradientDrawable.setCornerRadius(0);
+        let radiusArr = util.java.array("float", 8);
+        radiusArr[0] = 10;
+        radiusArr[1] = 10;
+        radiusArr[2] = 10;
+        radiusArr[3] = 10;
+        radiusArr[4] = 10;
+        radiusArr[5] = 10;
+        radiusArr[6] = 10;
+        radiusArr[7] = 10;
+        gradientDrawable.setCornerRadii(radiusArr);
+        gradientDrawable.setSize(0, 0);
+        view.setBackground(gradientDrawable);
+    }
+
+}
+
+function public() {
+    界面 = {
+        登录背景: 'https://hbimg.huabanimg.com/86251b0d89bcf6a3e082ff0e880cb0aa877eb2b610cd41-cL3c7x_fw658/format/webp',
+        启动: 'data:image/png;base64,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',
+        头像: 'https://hbimg.huabanimg.com/3ccbb5a11ee496ec63c77416fe98049bf1da93a24d589-oyjMV0_fw658/format/webp',
+        图鉴打码: 'http://www.ttshitu.com/images/portal/sy_logo.png',
+        清理缓存: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAOhElEQVR4Xu2d7bHeNBCFlwqACggVkFQAVABUkKQCoIJABSEVhFQAVJCkAkIFgQqACmAOc53xGH9J2rMrvT6eyeTHfb2yjvbZlWRJfs90ZSjw0My+NLP7ZnbP+QFemdkbM3tx97+z+WuZe+9a1U2vLaB4SoBiq2I/m9ljM/srveaDPoAAiWu4J2b2XVxx70oCHJ8rm9QpL0DqdCu965GZPS+9yfH3gORjZZJyRQVIuWald2CM8bb0JsLvMSYBqLoKFBAgBWJV/vRHM8OgvIfrgbpaZc0gQMr0qvn1PzU3ke55ZmbfkGzfpFkBwm3Wz8zsJbeIIuuvzQzPpOukAgLkpFCVP0O0xrRuLxfej6CbpeukAgLkpFCVP8O0LqZ3e7rU5gWtIbEKxKr4qQCpEK2nWwQItzUECFdfunUBwpVYgHD1pVsXIFyJBQhXX7p1AcKVWIBw9aVbFyBciQUIV1+6dQHClViAcPWlWxcgXIkFCFdfunUBwpVYgHD1pVsXIFyJBQhXX7p1AcKVWIBw9aVbFyBciQUIV1+6dQHClViAcPWlWxcgXIkFCFdfunUBwpVYgHD1pVsXIFyJBQhXX7p1AcKVWIBw9aVbFyBciQUIV1+6dQHClViAcPWlWxcgXIkFCFdfunUBwpVYgHD1pVsXIFyJBQhXX7p1AcKVWIBw9aVbFyBciQUIV1+6dQHClViAcPWlWxcgXIkFCFdfunUBwpVYgHD1pVsXIFyJBQhXX7p1AcKVWIBw9aVbFyBciQUIV1+6dQHClViAcPWlWxcgXIkFCFdfunUBwpVYgHD1pVsXIFyJBQhXX7p1AcKVWIBw9aVbFyBciQUIV1+6dQHClViAcPWlWxcgXIkFCFdfunUBwpVYgHD1pVsXIFyJBQhXX7p1AcKVWIBw9aVbFyBciQUIV1+6dQHClViAcPWlWxcgXIkFCFdfunUBwpVYgHD1pVsXIFyJBQhXX7p1AcKVWIBw9aVbFyBciQUIV1+6dQHClViAcPWlWxcgXIkFCFdfunUBwpVYgHD1pVsXIFyJBQhXX7p1AcKVWIBw9aVbv1VA7pnZR3T1jgt4ZGb419P1KvFhfjcz/HtjZq/N7K/EZzlV9C0B8pmZPTQz/A9AdPWvAGD90cxe9PqotwAIgHhyB0avOuu59hUAKN+bWWZ2W33CkQH5wMyedtiFEQz1CmDMBlC6uUYFBHC8NLP73SipB/FS4Gcze9zL+GREQAAF4AAkum5TAXS1Pu+haqMBoszRg9fEPMMzM/smpqjtUkYDBDMemKnSdQ0FkEVSB+4jAYKu1a/X8AvV8k6B9K7WSIAoe1yTm9QsMgogePH39pr+cflap2aRUQBR9rg2J2lZZARAlD2uDQdq/4uZfZkhwwiA/GBmX2eIozK7UuDju4WOoQ/VOyB474Gxh14KhrpFl4VhQWP4yujeAelxP0WX3nORhwrPIj0DouxxEa8vqGZ4FukZEKTT5wXi6afXUCA0i/QMCMYe2vh0DacvqWXoGq1eAVH2KHGZa/0W23SRRUK26/YKiLLHtZy+tLbYVIUJHPrVIyB4IfQTveYqYGQFwrJIj4BgMxT2meuSAnsKhGSR3gABGABElxQ4UiAki/QGiLLHkVvo73MFsHcdC1lpV0+AaEMUrZlv1jAOocOMFu3qCRAtaac1800bpmaRXgDRkvab9mFq5ahZpBdAlD2oPnTzxmlZpAdAsCjxz5tvQlWQqQAti/QAiJa0M13nOrYp23KzAdGS9us4MLumlMMdsgFR9mC7zbXsu2eRbEAw9tB22ms5MbO27lkkExAtaWe6ynVtu2aRTEC0pP26TsysuesRQVmAKHswXUS23bblZgGCQ6j18Rs5MksBt8MdMgDRknaWW8juXAGXLJIBiJa0y5EjFHDJItGAKHtEuIbKmBRoziLRgOADjV+o/aRAkALNRwRFAqIl7UFeoWLeKdC8LTcSEC1pl+dmKNB0uEMUIMoeGa6hMqFAUxaJAkTZQ86aqcC3ZobvzBRfEYBoSXtxs+gGZwXemNmDGpsRgOBj8E9rHk73SAFHBaqmfCMAUffKsZVlqlqBqlW+EYBgjf6n1dXSjVLAR4FuAdGuQZ8GlpV6Bf6u3ZgXkUEwxYtB0vv19dOdUqBJgep3IRGAoGb4pAHGIoKkqZ11c4UCTYsWowBBvTDdi+4W9oFoTFLR0rrltAJ/mBnGvgjK+L/6igSk+iF1oxTIUkCAZCmvcodQQIAM0Ux6yCwFBEiW8ip3CAUEyBDNpIfMUkCAZCmvcodQQIAM0Ux6yCwFBEiW8ip3CAV6A+SfIVTTQ2YrgL0dWL5EvwQIXWIVQFCgeodg6bMIkFLF9PseFHA9oHqvQgKkh+bWM5QqgIMYPiy9qeb3vQGCjzF+VFMR3XM5Baq20Jaq1Bsg2n1Y2oLX/T3t089zSQXIdR1s9Jo37fM4W3kBclYp/a43BaqP8impiAApUUu/7U0Buv/SCyhUVGOQQsEu/vOqk0pKNOsNEH2araT19Fv6C8PeANFSEzl9iQL0gboAKWkO/bY3BegDdQHSW5PreUoVoPow1XhpTc1MXawK0S5+C3Wg3hMg+sDnxT29svrUN+oCpLJVdFs3ClQfK3qmBj0Bou+InGkx/WapwGszQ++DcvUEiE6BpzTxzRulLn3vCRB9Q/3mfZlWQZof0wxXSKG36BWi6Zb/FKDNZPUEiKZ45e21CtBmsnoBRFO8ta6h+6AAbSarF0A0QJejtyhAO8ShF0A0QG9xD91LW5PVAyD48tSfamMp0KgAxZcpRgsriu8X/lR4j34uBZYKUE456QEQfEfuodpbCjQqQJnqzQZE3atGr9Dt7xSg7C7MBuSRmT1XI0sBBwUoU73ZgLw1s3sO4siEFKBM9WYCouwhp/ZUgLKqNxMQZQ9P95AtKODuz+4GT7aT3pyfFEo/K1IAJ75j+bvblQEIxhxYuYsZLF1SwFMB96neDEC0rN3TJWRrrsBXZoZlS25XNCA/mNnXbk8vQ6MqgG4QowfhPtUbCUjvs1Z/BH68J7KsNYj+NrP3k+hilu1+0mIUIL3DAV+JdNrfzOyTJAdFsfiSV9b7J6bO7lO9EYCMAAecBuJ+GuS0TCc5qkJkPdeehRkc3A9wYAMyChxwWCy5v3/kXQ5/h4Oge5MVwfHG+QuHetSaQDeIuTjV1addjS0UGwUOPPazwMkDDCSf1HqXw32RdV0+LoIDojwzUz8wM2ygcrlYgMAB8DJwlAsrQZ8GPWxkWcsqIVNie0EWoIAT2YuZPV3fhTAAGSlzwIEwq4Jnjti0BQdF4MhawQwHRTeSGcH34gyiO96DMS/XqV5vQEaDY+peIe1HRFU4aFRZa04IB0UgYEbwLedHcIB/vGTS4X3CiScgiEzs6MDQFk6DqB4xcEVZeFmaEcHhoGijrP3/CA6YXmZ3ZV2ner0AwVtRwJERmVqggdPgmSNWFmOAOjko4y3ykQ7oeuAjqewIvvUc2DOOA8rZKylcTzjxAgRpG4cvjHZN/dWIUx0xOMcAOSuCw0HRRuwIvuYDU1SP+oqxl1+7rJ8f+VREOA0ySERUxVJsZJCIspZOOu22y1oLNx0NiuAQkT3dTjjxIC2ie8LITJPTREwsTGuEsr6BMq1yjYrg8/bCLCGCEMCAr0RcblO9rYBEOBdL0EnEiKg6vbzKOOJoGmdBx4iu5LK9MDhHYIjsabidcNIKyKh7O+ZOw46q81kVdllrwWRylmkyghVw9gbnmL2K3EXq9i6kBZBRp3XRkPPj8tn94nlZ0RF86t7g3UvGCZbz5eeR2dNtqrcFkMiI4Bn15tmDHVXnZWUElHkkzWiv+VggsrfRBSAZ3QUPUOb9U3ZUnWePjPHa/BCD6BP0l04anT1bgv87P2sxEl1hDzjmXQ7YY0bVefZgl7WmzXJ3XfRs4zx7RA7QJy1afLsZEHbXxAOGNRvLwRszqi4/CxadcefvAqLPQF5mj4zp7VRAMiJCKzTL7AF7rKi6zB4oiz0ZMNdnmT2i22v5HiJygN5FBokWvBUO3L/MHsyouswekRkXgQATAphanS5mV3LZNmsD5OjsiWdSBimgZi2isyBfK4s9GTCXYu0dALMruWyGtbfYGePVVEAypiwLePjfT9c+E8yKqmuHl7HKWlZ0rRvJ7Eouy187docViPb8YVo53eIz/93bQllGVKip8JZYjKi6Nf8e1cVYW2LB7Eou22NtkWDGAN3tUwgtgEQ1eg0U83u2Fq4xBs1bZUUEk7WuHXSI6t5tLe/IGKCv9Riq/KgFkKhuQ1XF7m7aiiSMQfPWqX5R3dEtOCPaaatrh2aIfIM++UoXy90ZTtYCw1p/fDmbM/3G+632noNEdDH2llZEZPqtiB3ZvZva1m2ZSesYBPdHiF8Lzd6KTu8l7nvLqyO6GHsRk92923PIqO7d3EdcT3hv6WLhoTJmKM4As9Ufn+71TPtHMyasl5FTXfYCQUT3bu+gNu9AdNT2rtnDI4PABmM26EiIo7/v7SjzTvt7DsLuhh4FAnb37mjfhWcgOmpz/N1tJ+FUWGsGgR04HN7aZh2nvxRu2sG2Jajn+COyrLX6HDkEsws8HSO09ckz70B0BMgRrEf3r/7dA5Ceulp7g+VJAK8xwZGDsLPrEZwonzn+OILTMxAdObf7d0E8MwhrZuhIlLW/nxmgeb3/OHIQPJ9XWcu6noGTOUA+A6dXIDryA4wBMRZ2/XgnAxDYjIwaS+HORBGvQesZB2E66Bk4WQ56Bk5mcJi3+5k2PwJs9+9eXax5IXAMNE7kmORso3nMqpyNWCwHPQMn00HPwMkMDpOvUcYcS1oYgKAMzN7AQaLOoD3TaNO5TK0Hl535/gRrgHo0pczu7p51SubMJqZyMTvn9g2QvRTCAmTeUIjazGxyttE8llycPW/Jo6xlu2ECAn3tM47BePdy9h0D690YggN8CYE37PoXT1B25wNZKS4AAAAASUVORK5CYII='
+    };
+    脚本logo = 'data:image/png;base64,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';
+    悬浮窗logo = 'data:image/png;base64,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'
+}
+
+function foundation() {
+    悬浮窗 = function (参数) {
+        var 悬块 = function (window, view) {
+            //判断是否缺少构造参数。
+            if (!window || !view) {
+                //缺少构造参数，抛出错误。
+                throw "缺参数";
+            };
+            //记录按键被按下时的触摸坐标
+            this.x = 0, this.y = 0;
+            //记录按键被按下时的悬浮窗位置
+            this.windowX, this.windowY;
+            //按下时长超过此值则执行长按等动作
+            this.downTime = 500;
+            //记录定时执行器的返回id
+            this.Timeout = 0;
+            //创建点击长按事件
+            this.Click = function () { };
+            this.LongClick = function () { };
+            //可修改点击长按事件
+            this.setClick = function (fun) {
+                //判断参数类型是否为函数？
+                if (typeof fun == "function") {
+                    this.Click = fun;
+                };
+            };
+            this.setLongClick = function (fun, ji) {
+                //判断参数类型是否为函数？
+                if (typeof fun == "function") {
+                    this.LongClick = fun;
+                    //判断参数是否可为设置数字？
+                    if (parseInt(ji) <= 1000) {
+                        this.downTime = parseInt(ji);
+                    };
+                };
+            };
+
+            view.setOnTouchListener(new android.view.View.OnTouchListener((view, event) => {
+                //判断当前触控事件，以便执行操作。
+                switch (event.getAction()) {
+                    //按下事件。
+                    case event.ACTION_DOWN:
+                        //按下记录各种坐标数据。
+                        this.x = event.getRawX();
+                        this.y = event.getRawY();
+                        this.windowX = window.getX();
+                        this.windowY = window.getY();
+                        //创建一个定时器用来定时执行长按操作。
+                        this.Timeout = setTimeout(() => {
+                            this.LongClick();
+                            this.Timeout = 0;
+                        }, this.downTime);
+                        return true;
+                    //移动事件。
+                    case event.ACTION_MOVE:
+                        //移动距离过大则判断为移动状态
+                        if (Math.abs(event.getRawY() - this.y) > 5 && Math.abs(event.getRawX() - this.x) > 5) {
+                            //移动状态清除定时器
+                            if (this.Timeout) {
+                                //定时器存在则清除定时器。
+                                clearTimeout(this.Timeout);
+                                this.Timeout = 0;
+                            };
+                            //移动手指时调整悬浮窗位置
+                            // var 设备宽度 = device.width, 设备高度 = device.height;
+
+                            // log(this.windowX + (event.getRawX() - this.x), this.windowY + (event.getRawY() - this.y))
+                            window.setPosition(this.windowX + (event.getRawX() - this.x), this.windowY + (event.getRawY() - this.y));
+                        };
+                        return true;
+                    //抬起事件。
+                    case event.ACTION_UP:
+                        if (this.Timeout) {
+                            //手指抬起时，定时器存在，说明没有移动和按下时间小于长按时间。
+                            //清除定时器。
+                            clearTimeout(this.Timeout);
+                            this.Timeout = 0;
+                            //执行点击事件。
+                            this.Click();
+
+                        } else {
+
+                            // log(event.getRawX())
+                            var X = this.windowX + (event.getRawX() - this.x);
+                            var Y = this.windowY + (event.getRawY() - this.y)
+                            // log(event.getRawY())
+                            // log(Y)
+                            if (X >= 设备宽度 / 2) {
+                                X = 设备宽度 - 设备宽度 * 0.15;
+                            } else {
+                                X = 0;
+                            }
+                            if (Y >= 设备高度 - 300) {
+                                Y = 设备高度 * 0.3;
+                            } else if (Y < 0) {
+                                Y = 0;
+                            }
+                            window.setPosition(X, Y);
+                        }
+                        return true;
+                };
+                //控件的触控事件函数必须要返回true。否则报错。
+                return true;
+            }));
+        };
+
+        打印 = floaty.rawWindow(
+            <vertical h="auto" w='{{设备宽度*0.8}}px' id='打印高度' >
+                <card w="*" h="*" cardCornerRadius="5dp"
+                    cardBackgroundColor='#000000' cardElevation="0dp" alpha='0.7'>
+                    <vertical h="auto" w='*' >
+                        <text text={脚本名称 + "v" + 当前版本号} textColor="#17b9de" textSize="22sp" w="auto" h="auto" layout_gravity="center" />
+                        <frame w='*' h='1px' bg="#FFFAF0" />
+                        <text text={"ws:v" + 控件信息.ws版本} textColor="#17b9de" textSize="22sp" w="auto" h="auto" layout_gravity="center" />
+                        <frame w='*' h='1px' bg="#FFFAF0" />
+                        <vertical visibility="gone" padding="10 5" h="auto" w='*'>
+                            <horizontal w="*" h="auto"  >
+                                <text text="操作阈值:" textColor="#fef02f" textSize="15sp" w="auto" h="auto" ></text>
+                                <text id="操作阈值" text="null" textColor="#fef02f" textSize="15sp" w="auto" h="auto" ></text>
+                            </horizontal>
+
+                            <horizontal w="*" h="auto"  >
+                                <text text="操作记录:" textColor="#fef02f" textSize="15sp" w="auto" h="auto" ></text>
+                                <text text="添加" textColor="#fef02f" textSize="15sp" w="auto" h="auto" marginLeft="7dp"></text>
+                                <text id="添加" text="null" textColor="#fef02f" textSize="15sp" w="auto" h="auto"  ></text>
+                                <text text="私信" textColor="#fef02f" textSize="15sp" w="auto" h="auto" marginLeft="7dp" ></text>
+                                <text id="私信" text="null" textColor="#fef02f" textSize="15sp" w="auto" h="auto"  ></text>
+                                <text text="拨打" textColor="#fef02f" textSize="15sp" w="auto" h="auto" marginLeft="7dp" ></text>
+                                <text id="拨打" text="null" textColor="#fef02f" textSize="15sp" w="auto" h="auto"  ></text>
+                            </horizontal>
+                        </vertical>
+                        <frame w='*' h='1px' bg="#FFFAF0" />
+                        <horizontal w='*' h='auto' id='日志栏' padding="0 10">
+                            <vertical layout_gravity="center" marginLeft='10'>
+                                <ScrollView id="As" h="110sp" w="*" >
+                                    <text id="Alog" textSize="12sp" textColor="#FFFAFA" margin="1"   ></text>
+                                </ScrollView>
+                                <text id="log" textSize="12sp" textColor="#17b9de" margin="1"   ></text>
+                            </vertical>
+                        </horizontal>
+                    </vertical>
+                </card>
+            </vertical>
+        );
+
+        window = floaty.rawWindow(
+            <vertical  >
+                <img id="but" w="{{Math.floor((设备宽度*0.14) / 10) * 10}}px" h="{{Math.floor((设备宽度*0.14) / 10) * 10}}px" alpha="1" src="file://./public/icon.png" scaleType='fitXY' circle='true' borderWidth="3dp" borderColor="#ff0033" />
+                <card w="auto" h="auto"
+                    cardCornerRadius="5" cardBackgroundColor="#B5B5B5" cardElevation="2px" layout_gravity="center_horizontal" marginTop="15px" >
+                    <vertical id="缩放" h="auto" padding="0 20px" >
+                        <img id="运行" tint="red" src="ic_pause_black_48dp" layout_gravity="center" w="{{Math.floor((设备宽度*0.14) / 10) * 10}}px" h="{{Math.floor((设备宽度*0.14) / 10) * 10}}px"   ></img>
+                        <frame w="*" h="1px" bg='#DEDEDE' margin='10dp 5dp' />
+                        <img id="window打印" tint="#000000" src="ic_assignment_black_48dp" layout_gravity="center" w="{{Math.floor((设备宽度*0.14) / 10) * 10}}px" h="{{Math.floor((设备宽度*0.14) / 10) * 10}}px" ></img>
+                        <frame w="*" h="1px" bg='#DEDEDE' margin='10dp 5dp' />
+                        <img id="首页" tint="#708090" src="ic_home_black_48dp" layout_gravity="center" w="{{Math.floor((设备宽度*0.14) / 10) * 10}}px" h="{{Math.floor((设备宽度*0.14) / 10) * 10}}px" ></img>
+                    </vertical>
+                </card>
+            </vertical>
+        );
+
+        打印.setPosition(-2000, 50);
+        打印.setSize(-1, -2);
+        打印.setTouchable(false);
+        window.setTouchable(true);
+        window.setPosition(0, 设备高度 * 0.2);
+
+        setInterval(() => { }, 500);
+        myConsole("运行悬浮窗")
+        if (悬浮窗启动方式 == 0) {
+            if (参数 == '主程序') {
+                主程序线程 = threads.start(主程序);
+            }
+            window.运行.attr("tint", "red");
+            window.运行.attr("src", "ic_pause_black_48dp");
+        } else {
+            主程序线程.interrupt();
+            window.运行.attr("tint", "#76EEC6");
+            window.运行.attr("src", "ic_play_arrow_black_48dp");
+        }
+        // var tranfrom;
+        var ad = new 悬块(window, window.but);
+        ad.setClick(function () {
+            // if (window.but.attr("alpha") == "0.5") {
+            //     window.缩放.attr("h", "-2");
+            //     window.but.attr("alpha", "1");
+            //     // try {
+            //     //     tranfrom.cancel();  // 取消动画
+            //     // } catch (error) {
+            //     // }
+            // } else if (window.but.attr("alpha") == "1") {
+            //     window.缩放.attr("h", "0");
+            //     window.but.attr("alpha", "0.5");
+            //     // try {
+            //     //     tranfrom = new android.view.animation.RotateAnimation(0, 359, android.view.animation.Animation.RELATIVE_TO_SELF, 0.5, android.view.animation.Animation.RELATIVE_TO_SELF, 0.5); //(359:旋转角度（可自调），若为360会有卡顿，正数为顺势针旋转，负数为逆时针)
+            //     //     tranfrom.setDuration(2000); // 旋转速度
+            //     //     tranfrom.setFillAfter(true);
+            //     //     tranfrom.setRepeatCount(-1); // －1为一只旋转，若10，则旋转10次设定的角度后停止
+            //     //     tranfrom.setInterpolator(new android.view.animation.LinearInterpolator());//匀速插值器 解决卡顿问题
+            //     //     window.but.setAnimation(tranfrom);
+            //     // } catch (error) {
+            //     // }
+            // }
+        });
+
+        window.运行.on("click", function () {
+            if (window.运行.attr("tint") == "#76EEC6") {
+                日志({ 文本: '物理启动中' });
+                if (参数 == '主程序') {
+                    主程序线程 = threads.start(主程序);
+                }
+                window.运行.attr("tint", "red");
+                window.运行.attr("src", "ic_pause_black_48dp");
+            } else if (window.运行.attr("tint") == "red") {
+                日志({ 文本: '停止运行' });
+                主程序线程.interrupt();
+                window.运行.attr("tint", "#76EEC6");
+                window.运行.attr("src", "ic_play_arrow_black_48dp");
+            }
+        })
+
+        window.window打印.on("click", function () {
+            if (window.window打印.attr("tint") == '#000000') {
+                打印.setPosition(0, 50);
+                window.window打印.attr("tint", "#FFFAFA");
+            } else {
+                打印.setPosition(-2000, 50);
+                window.window打印.attr("tint", "#000000");
+            }
+        })
+
+        window.首页.on("click", function () {
+            返回ui页();
+        });
+
+        setTimeout(() => {
+            // ui.run(function () {
+            //     window.缩放.attr("h", "0");
+            //     window.but.attr("alpha", "0.5");
+            //     // try {
+            //     //     tranfrom.cancel();  // 取消动画
+            //     // } catch (error) {
+
+            //     // }
+            //     // try {
+            //     //     tranfrom = new android.view.animation.RotateAnimation(0, 359, android.view.animation.Animation.RELATIVE_TO_SELF, 0.5, android.view.animation.Animation.RELATIVE_TO_SELF, 0.5); //(359:旋转角度（可自调），若为360会有卡顿，正数为顺势针旋转，负数为逆时针)
+            //     //     tranfrom.setDuration(2000); // 旋转速度
+            //     //     tranfrom.setFillAfter(true);
+            //     //     tranfrom.setRepeatCount(-1); // －1为一只旋转，若10，则旋转10次设定的角度后停止
+            //     //     tranfrom.setInterpolator(new android.view.animation.LinearInterpolator());//匀速插值器 解决卡顿问题
+            //     //     window.but.setAnimation(tranfrom);
+            //     // } catch (error) {
+            //     //     myConsole(error)
+            //     // }
+            // });
+        }, 3000)
+    };
+
+    日志 = function (参数) {
+        if (!日志输出已开启()) return;
+        参数 = 参数 || {};
+        参数.rgb = 参数.rgb || '灰色';
+        参数.level = 参数.level || (参数.rgb == "红色" ? "ERROR" : (参数.rgb == "灰色" ? "DEBUG" : "INFO"));
+        if (参数.打印 == undefined) 参数.打印 = true;
+        参数.控件id = 参数.控件id || '当前log';
+        参数.文本 = 参数.文本 + '';
+        if (!参数.已格式化) {
+            参数.文本 = "[" + 参数.level + "] " + 参数.文本;
+        }
+        try {
+            if (参数.控件id == 'log') {
+                ui.run(function () {
+                    打印.log.setText(参数.文本);
+                });
+            } else if (参数.控件id == '当前log') {
+                var 时间 = 时间格式(new Date(), '时间');
+                var 打印内容 = 打印.Alog.getText().split('\n');
+                打印内容.splice(0, 打印内容.length - 10)
+                打印内容 = 打印内容.join("\n") + "\n" + 时间 + "  " + 参数.文本
+                ui.run(function () {
+                    打印.Alog.setText(打印内容);
+                    打印.As.scrollTo(0, 打印.Alog.getHeight());
+                });
+                if (!参数.仅界面) {
+                    输出控制台日志(参数.level, 参数.文本);
+                }
+            } else {
+                ui.run(function () {
+                    打印[参数.控件id].setText(参数.文本);
+                });
+                if (!参数.仅界面) {
+                    输出控制台日志(参数.level, 参数.文本);
+                }
+            }
+        } catch (error) {
+            toastLog("false:" + 参数.文本);
+        }
+    };
+
+    时间格式 = function (now, 格式) {
+        if (格式 == "时间") {
+            var hour = now.getHours();
+            if (hour < 10) {
+                hour = "0" + hour;
+            }
+            var minute = now.getMinutes();
+            if (minute < 10) {
+                minute = "0" + minute;
+            }
+            var second = now.getSeconds();
+            if (second < 10) {
+                second = "0" + second;
+            }
+            return hour + ":" + minute + ":" + second;
+        } else {
+            var month = now.getMonth() + 1;
+            if (month < 10) {
+                month = "0" + month;
+            }
+            var date = now.getDate();
+            if (date < 10) {
+                date = "0" + date;
+            }
+            var hour = now.getHours();
+            if (hour < 10) {
+                hour = "0" + hour;
+            }
+            var minute = now.getMinutes();
+            if (minute < 10) {
+                minute = "0" + minute;
+            }
+            var second = now.getSeconds();
+            if (second < 10) {
+                second = "0" + second;
+            }
+            return month + "/" + date + "/ " + hour + ":" + minute + ":" + second;
+        }
+    }
+
+    返回ui页 = function () {
+        toastLog("回到首页");
+        主程序线程.interrupt();
+        floaty.closeAll()
+        悬浮窗线程.interrupt();
+        var intent = new Intent(context, activity.class);
+        activity.startActivityForResult(intent, 0);
+    };
+
+    获取应用版本名 = function (packageName) {
+        if (!getAppName(packageName)) {
+            return null;
+        }
+        importPackage(android.content);
+        var pckMan = context.getPackageManager();
+        var packageInfo = pckMan.getPackageInfo(packageName, 0);
+        return packageInfo.versionName;
+    };
+
+    ui控件存储 = function () {
+        存储控件('私信用户_box', 'checked');
+        存储控件('发送图片_box', 'checked');
+        存储控件('写男_box', 'checked');
+        存储控件('搜索坐标_box', 'checked');
+        存储控件('消费范围_box', 'checked');
+        存储控件('写女_box', 'checked');
+        存储控件('过滤男模_box', 'checked');
+        存储控件('过滤女模_box', 'checked');
+        存储控件('重复不写_box', 'checked');
+        存储控件('任务间隔_box', 'checked');
+        存储控件('图片位置_box', 'checked');
+        存储控件('操作延迟_box', 'checked');
+        保存控件信息();
+    };
+
+    存储控件 = function (id, 类型) {
+        if (类型 == "checked") {
+            控件信息[(id)] = ui[id].checked;
+        } else if (类型 == "text") {
+            控件信息[(id)] = ui[id].getText().toString();
+        } else if (类型 == "textColor") {
+            控件信息[(id)] = ui[id].attr("textColor");
+        } else if (类型 == "进度条") {
+            控件信息[(id)] = ui[id].getProgress();
+        }
+    };
+
+    权限检测 = function (权限data) {
+        if (权限data.无障碍) {
+            if (auto.service == null) {
+                var builder = new android.app.AlertDialog.Builder(activity)
+                builder.setTitle("提示：");
+                builder.setMessage('缺少无障碍权限,是否开启');
+                builder.setIcon(drawable_Id("ic_view_list_black_48dp"));
+                builder.setCancelable(false);
+                //设置正面按钮
+                builder.setPositiveButton("确认", new android.content.DialogInterface.OnClickListener({
+                    onClick: function (dialog, which) {
+                        app.startActivity({
+                            action: "android.settings.ACCESSIBILITY_SETTINGS"
+                        });
+                        dialog.dismiss();
+                    }
+                }))
+                //设置反面按钮
+                builder.setNegativeButton("取消", new android.content.DialogInterface.OnClickListener({
+                    onClick: function (dialog, which) {
+                        dialog.dismiss();
+                    }
+                }))
+
+                //创建AlertDialog对象
+                dialog = builder.create();
+                dialog.show();
+                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setTextColor(android.graphics.Color.RED);
+                dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setTextColor(android.graphics.Color.BLUE);
+                return false;
+            }
+        }
+        if (权限data.悬浮窗) {
+            if (floaty.checkPermission() != true) {
+                var builder = new android.app.AlertDialog.Builder(activity)
+                builder.setTitle("提示：");
+                builder.setMessage("缺少悬浮窗权限,是否开启");
+                builder.setIcon(drawable_Id("ic_view_list_black_48dp"));
+                builder.setCancelable(false);
+                //设置正面按钮
+                builder.setPositiveButton("确认", new android.content.DialogInterface.OnClickListener({
+                    onClick: function (dialog, which) {
+                        dialog.dismiss();
+                        app.startActivity({
+                            action: "android.settings.action.MANAGE_OVERLAY_PERMISSION"
+                        });
+                    }
+                }))
+
+                //设置反面按钮
+                builder.setNegativeButton("取消", new android.content.DialogInterface.OnClickListener({
+                    onClick: function (dialog, which) {
+                        dialog.dismiss();
+                    }
+                }))
+
+                //创建AlertDialog对象
+                dialog = builder.create();
+                dialog.show();
+                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setTextColor(android.graphics.Color.RED);
+                dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setTextColor(android.graphics.Color.BLUE);
+
+                return false;
+            }
+        }
+        if (权限data.截图) {
+            try {
+                captureScreen();
+            } catch (error) {
+                var builder = new android.app.AlertDialog.Builder(activity)
+                builder.setTitle("提示：");
+                builder.setMessage("缺少截图权限,是否开启");
+                builder.setIcon(drawable_Id("ic_view_list_black_48dp"));
+                builder.setCancelable(false);
+                //设置正面按钮
+                builder.setPositiveButton("确认", new android.content.DialogInterface.OnClickListener({
+                    onClick: function (dialog, which) {
+                        dialog.dismiss();
+                        threads.start(function () {
+                            requestScreenCapture();
+                        });
+                    }
+                }))
+                //设置反面按钮
+                builder.setNegativeButton("取消", new android.content.DialogInterface.OnClickListener({
+                    onClick: function (dialog, which) {
+                        dialog.dismiss();
+                    }
+                }))
+                //创建AlertDialog对象
+                dialog = builder.create();
+                dialog.show();
+                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setTextColor(android.graphics.Color.RED);
+                dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setTextColor(android.graphics.Color.BLUE);
+                return false;
+            }
+        }
+        if (权限data.adb) {
+            let adbCheck = $shell.checkAccess("adb");
+            if (!adbCheck) {
+                var builder = new android.app.AlertDialog.Builder(activity)
+                builder.setTitle("提示：");
+                builder.setMessage("没有adb权限, 请先使用shizuku激活脚本的adb权限");
+                builder.setIcon(drawable_Id("ic_view_list_black_48dp"));
+                builder.setCancelable(false);
+                //设置正面按钮
+                builder.setPositiveButton("确认", new android.content.DialogInterface.OnClickListener({
+                    onClick: function (dialog, which) {
+                        dialog.dismiss();
+                    }
+                }))
+                //创建AlertDialog对象
+                dialog = builder.create();
+                dialog.show();
+                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setTextColor(android.graphics.Color.RED);
+                dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setTextColor(android.graphics.Color.BLUE);
+                return false;
+            }
+        }
+        return true;
+    };
+
+    drawable_Id = function (imageName) {
+        var id = context.getResources().getIdentifier(imageName, "drawable", context.getPackageName());
+        return id;
+    };
+}
+
