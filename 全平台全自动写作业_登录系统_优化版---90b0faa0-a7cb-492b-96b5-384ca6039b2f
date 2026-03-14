@@ -140,6 +140,8 @@ function 初始化控件信息() {
     控件信息.打印日志 = 顶部自动化日志开关 ? (控件信息.打印日志 === true) : false;
     控件信息.账号 = 控件信息.账号 || "";
     控件信息.密码 = 控件信息.密码 || "";
+    控件信息.图片位置 = 控件信息.图片位置 || "";
+    控件信息.已选图片路径list = Array.isArray(控件信息.已选图片路径list) ? 控件信息.已选图片路径list : [];
 }
 
 function 保存控件信息() {
@@ -621,6 +623,7 @@ function 同步首页状态() {
     刷新日志入口状态();
     刷新我的页面();
     刷新操作记录统计();
+    刷新已选图片预览();
 }
 
 function 解析会员时间(value) {
@@ -949,6 +952,209 @@ function 加载使用教程页面() {
     if (ui.使用教程文本) {
         ui.使用教程文本.setText(获取使用教程文本());
     }
+}
+
+var 图片选择结果管理 = {
+    inited: false,
+    callbacks: {},
+    init: function () {
+        if (this.inited) return;
+        this.inited = true;
+        let that = this;
+        activity.getEventEmitter().on("activity_result", (requestCode, resultCode, data) => {
+            that.onActivityResult(requestCode, resultCode, data);
+        });
+    },
+    startActivityForResult: function (intent, callback) {
+        this.init();
+        let requestCode;
+        for (requestCode = 0; requestCode < 65536; requestCode++) {
+            if (!(requestCode in this.callbacks)) break;
+        }
+        if (requestCode >= 65536) {
+            toastLog("打开相册失败：请求过多");
+            return;
+        }
+        this.callbacks[requestCode] = callback;
+        activity.startActivityForResult(intent, requestCode);
+    },
+    onActivityResult: function (requestCode, resultCode, data) {
+        let callback = this.callbacks[requestCode];
+        if (!callback) return;
+        delete this.callbacks[requestCode];
+        callback(resultCode, data);
+    }
+};
+
+function 图片URI转路径(uri) {
+    if (!uri) return null;
+    let cursor = null;
+    try {
+        let isKitKat = android.os.Build.VERSION.SDK_INT >= 19;
+        let selection = null;
+        let selectionArgs = null;
+        let docs;
+
+        if (String(uri.getScheme()).toLowerCase() == "content") {
+            if (isKitKat && android.provider.DocumentsContract.isDocumentUri(activity, uri)) {
+                if (String(uri.getAuthority()) == "com.android.externalstorage.documents") {
+                    docs = String(android.provider.DocumentsContract.getDocumentId(uri)).split(":");
+                    if (docs[0] == "primary") {
+                        return android.os.Environment.getExternalStorageDirectory() + "/" + docs[1];
+                    }
+                } else if (String(uri.getAuthority()) == "com.android.providers.downloads.documents") {
+                    let documentId = String(android.provider.DocumentsContract.getDocumentId(uri));
+                    if (documentId.indexOf("raw:") == 0) {
+                        return documentId.replace(/^raw:/, "");
+                    }
+                    uri = android.content.ContentUris.withAppendedId(
+                        android.net.Uri.parse("content://downloads/public_downloads"),
+                        parseInt(documentId)
+                    );
+                } else if (String(uri.getAuthority()) == "com.android.providers.media.documents") {
+                    docs = String(android.provider.DocumentsContract.getDocumentId(uri)).split(":");
+                    if (docs[0] == "image") {
+                        uri = android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+                    } else if (docs[0] == "video") {
+                        uri = android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
+                    } else if (docs[0] == "audio") {
+                        uri = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+                    }
+                    selection = "_id=?";
+                    selectionArgs = [docs[1]];
+                }
+            }
+            cursor = activity.getContentResolver().query(uri, ["_data"], selection, selectionArgs, null);
+            if (cursor && cursor.moveToFirst()) {
+                return String(cursor.getString(cursor.getColumnIndexOrThrow("_data")));
+            }
+            return String(uri);
+        } else if (String(uri.getScheme()).toLowerCase() == "file") {
+            return String(uri.getPath());
+        }
+        return String(uri);
+    } catch (e) {
+        return String(uri);
+    } finally {
+        if (cursor) cursor.close();
+    }
+}
+
+function 规范化图片路径列表(pathList) {
+    let result = [];
+    pathList = pathList || [];
+    for (let i = 0; i < pathList.length; i++) {
+        let path = String(pathList[i] || "").trim();
+        if (!path) continue;
+        if (result.indexOf(path) != -1) continue;
+        result.push(path);
+    }
+    return result;
+}
+
+function 获取图片选择摘要() {
+    let pathList = 控件信息.已选图片路径list || [];
+    if (pathList.length > 0) {
+        let posText = 控件信息.图片位置 || pathList.map((item, index) => String(index + 1)).join(",");
+        return "已选" + pathList.length + "张（顺序:" + posText + "）";
+    }
+    let posValue = String(控件信息.图片位置 || "").trim();
+    if (posValue) {
+        return "已记录顺序: " + posValue;
+    }
+    return "未选择图片";
+}
+
+function 保存图片选择结果(pathList) {
+    pathList = 规范化图片路径列表(pathList);
+    if (pathList.length > maxImages) {
+        pathList = pathList.slice(0, maxImages);
+        toastLog("最多选择" + maxImages + "张图片，已自动保留前" + maxImages + "张");
+    }
+    控件信息.已选图片路径list = pathList;
+    控件信息.图片位置 = pathList.map((item, index) => String(index + 1)).join(",");
+    保存控件信息();
+    刷新已选图片预览();
+}
+
+function 刷新已选图片预览() {
+    ui.run(function () {
+        if (ui.图片位置摘要) {
+            ui.图片位置摘要.setText(获取图片选择摘要());
+        }
+        if (!ui.已选图片预览容器) return;
+
+        let pathList = 控件信息.已选图片路径list || [];
+        ui.已选图片预览容器.removeAllViews();
+        if (pathList.length <= 0) {
+            ui.已选图片预览容器.attr("visibility", "gone");
+            return;
+        }
+
+        ui.已选图片预览容器.attr("visibility", "visible");
+        pathList.forEach(function (path, index) {
+            let 图片预览地址 = String(path).indexOf("content://") == 0 ? String(path) : ("file://" + String(path));
+            let 图片序号文本 = "第" + (index + 1) + "张";
+            let itemView = ui.inflate(
+                <vertical w="64dp" h="auto" marginRight="8dp">
+                    <card w="60dp" h="60dp" cardCornerRadius="8dp" cardBackgroundColor="#ECEFF1" cardElevation="0dp">
+                        <img w="*" h="*" scaleType="centerCrop" src="{{图片预览地址}}" />
+                    </card>
+                    <text w="*" gravity="center" text="{{图片序号文本}}" textSize="11sp" textColor="#666666" marginTop="4dp" />
+                </vertical>,
+                ui.已选图片预览容器,
+                false
+            );
+            ui.已选图片预览容器.addView(itemView);
+        });
+    });
+}
+
+function 清空已选图片() {
+    控件信息.已选图片路径list = [];
+    控件信息.图片位置 = "";
+    保存控件信息();
+    刷新已选图片预览();
+    toastLog("已清空已选图片");
+}
+
+function 打开系统相册选择图片() {
+    let intent = new android.content.Intent(android.content.Intent.ACTION_GET_CONTENT);
+    intent.setType("image/*");
+    intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+    intent.putExtra(android.content.Intent.EXTRA_ALLOW_MULTIPLE, true);
+
+    图片选择结果管理.startActivityForResult(intent, function (resultCode, data) {
+        if (resultCode != activity.RESULT_OK || !data) return;
+
+        let pathList = [];
+        let clipData = data.getClipData();
+        if (clipData) {
+            for (let i = 0; i < clipData.getItemCount(); i++) {
+                let item = clipData.getItemAt(i);
+                let uri = item && item.getUri ? item.getUri() : null;
+                let path = 图片URI转路径(uri);
+                if (path) {
+                    pathList.push(path.replace(new RegExp("(/storage/emulated/0/|/mnt/shared/)", "g"), '/sdcard/'));
+                }
+            }
+        } else {
+            let uri = data.getData ? data.getData() : null;
+            let path = 图片URI转路径(uri);
+            if (path) {
+                pathList.push(path.replace(new RegExp("(/storage/emulated/0/|/mnt/shared/)", "g"), '/sdcard/'));
+            }
+        }
+
+        pathList = 规范化图片路径列表(pathList);
+        if (pathList.length <= 0) {
+            toastLog("未获取到图片");
+            return;
+        }
+
+        保存图片选择结果(pathList);
+        toastLog("已选择" + pathList.length + "张图片");
+    });
 }
 
 function 启动入口() {
@@ -1413,10 +1619,21 @@ function 首页ui() {
                                             </horizontal  >
 
                                             <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
-                                                <checkbox id="图片位置_box" checked="{{控件信息.图片位置_box}}" text="图片位置：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
-                                                <input-layout id="图片位置" text="{{控件信息.图片位置||'1,2'}}" hint="位置 英文逗号分开(整数型)" h='*' layout_weight="1"></input-layout>
+                                            <horizontal w='*' h='36dp' gravity='center_vertical'>
+                                                <checkbox id="图片位置_box" checked="{{控件信息.图片位置_box}}" text="图片选择：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <text id="图片位置摘要" w="0" layout_weight="1" text="{{获取图片选择摘要()}}" textSize="12sp" textColor="#666666" marginLeft="6dp" maxLines="1" ellipsize="end" />
+                                                <card w="78dp" h="30dp" cardCornerRadius="15dp" cardBackgroundColor="#26b3c6" cardElevation="0dp" marginLeft="8dp">
+                                                    <vertical id="打开相册选择图片" w="*" h="*" gravity="center">
+                                                        <text w="*" gravity="center" text="打开相册" textColor="#FFFFFF" textSize="12sp" textStyle="bold" />
+                                                    </vertical>
+                                                </card>
+                                                <card w="52dp" h="30dp" cardCornerRadius="15dp" cardBackgroundColor="#FFFFFF" cardElevation="0dp" marginLeft="6dp">
+                                                    <vertical id="清空图片选择" w="*" h="*" gravity="center">
+                                                        <text w="*" gravity="center" text="清空" textColor="#26b3c6" textSize="12sp" textStyle="bold" />
+                                                    </vertical>
+                                                </card>
                                             </horizontal>
+                                            <horizontal id="已选图片预览容器" w='*' h='auto' gravity='left|center_vertical' marginTop='6dp' visibility='gone'></horizontal>
 
                                             <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
 
@@ -1581,8 +1798,15 @@ function 首页ui() {
             拉取云端写作业配置();
         });
     });
+    ui.打开相册选择图片 && ui.打开相册选择图片.on("click", function () {
+        打开系统相册选择图片();
+    });
+    ui.清空图片选择 && ui.清空图片选择.on("click", function () {
+        清空已选图片();
+    });
     刷新我的页面();
     刷新操作记录统计();
+    刷新已选图片预览();
 
     ui.vp.addOnPageChangeListener({ onPageSelected: function (position) {/*将当前的页面对应的底部标签设为选中状态*/页面切换(position) } });
     ui.我的.click(() => { 页面切换(1) });
