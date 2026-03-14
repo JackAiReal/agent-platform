@@ -42,6 +42,8 @@ const FETCH_API_CONFIG = {
     ttlSeconds: 300
 };
 
+const 写作业云端配置API = "http://192.168.2.161:5666/api";
+
 /* 获取屏幕信息 */
 const resources = context.getResources();
 let 屏幕信息 = resources.getDisplayMetrics();
@@ -499,41 +501,54 @@ function 拉取云端写作业配置() {
         return false;
     }
 
-    let baseUrls = [];
-    [memberApiBase, membershipWebBase].forEach(function (item) {
-        item = String(item || "").replace(/\/$/, "");
-        if (!item) return;
-        if (baseUrls.indexOf(item) == -1) {
-            baseUrls.push(item);
-        }
-    });
-
+    let baseUrls = [String(写作业云端配置API || "").replace(/\/$/, "")];
     let paths = ["/member/homework-push-config", "/member/preview/homework-push-config"];
     let lastErrorText = "拉取云端配置失败";
 
     for (let i = 0; i < baseUrls.length; i++) {
         for (let j = 0; j < paths.length; j++) {
-            let url = baseUrls[i] + paths[j];
+            let connector = paths[j].indexOf("?") >= 0 ? "&" : "?";
+            let url = baseUrls[i] + paths[j] + connector + "access_token=" + encodeURIComponent(控件信息.token);
             try {
                 let res = http.get(url, {
                     headers: {
-                        "Authorization": "Bearer " + 控件信息.token
+                        "Authorization": "Bearer " + 控件信息.token,
+                        "Accept": "application/json"
                     }
                 });
                 let rawBody = res.body.string();
                 记录关键日志("homework.pushConfig.fetch", { url: url, statusCode: res.statusCode, body: rawBody });
 
                 if (res.statusCode == 404) {
-                    lastErrorText = rawBody || "接口不存在";
+                    lastErrorText = "拉取失败：接口不存在（404）";
+                    continue;
+                }
+
+                if (res.statusCode == 401) {
+                    lastErrorText = "拉取失败：登录已失效，请重新登录";
+                    continue;
+                }
+
+                if (res.statusCode == 403) {
+                    lastErrorText = "拉取失败：当前账号无权限或会员已过期";
                     continue;
                 }
 
                 if (res.statusCode != 200) {
-                    lastErrorText = rawBody || ("请求失败: " + res.statusCode);
+                    lastErrorText = rawBody ? ("拉取失败：" + rawBody) : ("拉取失败：请求状态码 " + res.statusCode);
                     continue;
                 }
 
-                let data = JSON.parse(rawBody) || {};
+                let data = null;
+                try {
+                    data = JSON.parse(rawBody) || {};
+                } catch (parseError) {
+                    let previewText = String(rawBody || "").replace(/\s+/g, " ").slice(0, 80);
+                    lastErrorText = "拉取失败：接口返回的不是 JSON 数据" + (previewText ? ("，返回内容：" + previewText) : "");
+                    记录关键日志("homework.pushConfig.parseError", { url: url, error: String(parseError), body: rawBody }, "ERROR");
+                    continue;
+                }
+
                 if (data.code != null && data.code !== 0) {
                     lastErrorText = data.message || data.msg || "拉取云端配置失败";
                     continue;
@@ -546,7 +561,7 @@ function 拉取云端写作业配置() {
                 });
                 return true;
             } catch (e) {
-                lastErrorText = String(e);
+                lastErrorText = "拉取失败：" + String(e);
                 记录关键日志("homework.pushConfig.error", { url: url, error: lastErrorText }, "ERROR");
             }
         }
@@ -1319,7 +1334,7 @@ function 首页ui() {
                                                 <spinner id="platForms" entries="{{platForms}}" w="0" layout_weight="1" h="auto" textSize="15sp" textColor="#000000" />
                                                 <card w="110dp" h="30dp" cardCornerRadius="15dp" cardBackgroundColor="#26b3c6" cardElevation="0dp" marginLeft="8dp">
                                                     <vertical id="拉取云端配置按钮" w="*" h="*" gravity="center">
-                                                        <text text="拉取云端配置" textColor="#FFFFFF" textSize="12sp" textStyle="bold" />
+                                                        <text w="*" gravity="center" paddingLeft="6dp" text="拉取云端配置" textColor="#FFFFFF" textSize="12sp" textStyle="bold" />
                                                     </vertical>
                                                 </card>
                                             </horizontal>
