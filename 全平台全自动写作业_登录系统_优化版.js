@@ -146,10 +146,413 @@ function 初始化控件信息() {
     控件信息.图片位置 = 控件信息.图片位置 || "";
     控件信息.已选图片路径list = Array.isArray(控件信息.已选图片路径list) ? 控件信息.已选图片路径list : [];
     控件信息.已选音频路径list = Array.isArray(控件信息.已选音频路径list) ? 控件信息.已选音频路径list : [];
+    控件信息.写作业统计 = 兼容写作业统计(控件信息.写作业统计);
 }
 
 function 保存控件信息() {
     storage.put("控件存储", 控件信息);
+}
+
+let 写作业统计自动刷新已启动 = false;
+let 上次写作业统计刷新时间 = 0;
+
+function 创建写作业统计时间分布() {
+    let data = {};
+    for (let i = 0; i < 24; i++) {
+        let key = (i < 10 ? "0" : "") + i;
+        data[key] = 0;
+    }
+    return data;
+}
+
+function 创建默认写作业统计() {
+    return {
+        version: 1,
+        当前任务: {
+            running: false,
+            statusText: "未运行",
+            platform: "-",
+            sourceType: "-",
+            startTime: 0,
+            endTime: 0,
+            durationMs: 0,
+            currentPage: parseInt(page) || 1,
+            limit: parseInt((控件信息 || {}).操作阈值) || 0,
+            lastSuccessTime: 0
+        },
+        总览: {
+            loadedCount: 0,
+            processedCount: 0,
+            successCount: 0,
+            failCount: 0,
+            skipCount: 0
+        },
+        来源统计: {
+            localCount: 0,
+            remoteCount: 0
+        },
+        性别分布: {
+            男: 0,
+            女: 0,
+            未知: 0
+        },
+        操作分布: {
+            私信: 0,
+            发语音条: 0,
+            发图: 0
+        },
+        跳过分布: {
+            性别不符: 0,
+            模特过滤: 0,
+            消费范围不符: 0,
+            重复不写: 0,
+            ID解析失败: 0,
+            搜索无结果: 0,
+            无法进入聊天: 0,
+            其他: 0
+        },
+        等级分布: {},
+        时间分布: 创建写作业统计时间分布(),
+        最近记录: []
+    };
+}
+
+function 兼容写作业统计(raw) {
+    let base = 创建默认写作业统计();
+    raw = raw && typeof raw == "object" ? raw : {};
+
+    function mergeObj(target, source) {
+        Object.keys(source || {}).forEach(function (key) {
+            let value = source[key];
+            if (value && typeof value == "object" && !Array.isArray(value)) {
+                target[key] = target[key] && typeof target[key] == "object" && !Array.isArray(target[key]) ? target[key] : {};
+                mergeObj(target[key], value);
+            } else {
+                target[key] = value;
+            }
+        });
+        return target;
+    }
+
+    base = mergeObj(base, raw);
+    base.最近记录 = Array.isArray(raw.最近记录) ? raw.最近记录.slice(0, 20) : [];
+    return base;
+}
+
+function 获取写作业统计() {
+    if (!控件信息.写作业统计 || typeof 控件信息.写作业统计 != "object") {
+        控件信息.写作业统计 = 创建默认写作业统计();
+    }
+    控件信息.写作业统计 = 兼容写作业统计(控件信息.写作业统计);
+    return 控件信息.写作业统计;
+}
+
+function 刷新写作业统计来源(stats) {
+    stats = stats || 获取写作业统计();
+    if (stats.来源统计.localCount > 0 && stats.来源统计.remoteCount > 0) {
+        stats.当前任务.sourceType = "本地+云端";
+    } else if (stats.来源统计.localCount > 0) {
+        stats.当前任务.sourceType = "本地ID";
+    } else if (stats.来源统计.remoteCount > 0) {
+        stats.当前任务.sourceType = "云端ID";
+    } else {
+        stats.当前任务.sourceType = stats.当前任务.sourceType || "-";
+    }
+}
+
+function 重置写作业统计(platformName) {
+    控件信息.写作业统计 = 创建默认写作业统计();
+    let stats = 获取写作业统计();
+    stats.当前任务.platform = platformName || stats.当前任务.platform || "-";
+    stats.当前任务.limit = parseInt(控件信息.操作阈值) || 0;
+    stats.当前任务.currentPage = parseInt(page) || 1;
+    保存控件信息();
+    刷新写作业统计页面();
+}
+
+function 开始写作业统计(platformName) {
+    重置写作业统计(platformName || aimAPP || "-");
+    let stats = 获取写作业统计();
+    stats.当前任务.running = true;
+    stats.当前任务.statusText = "运行中";
+    stats.当前任务.platform = platformName || aimAPP || stats.当前任务.platform || "-";
+    stats.当前任务.startTime = Date.now();
+    stats.当前任务.endTime = 0;
+    stats.当前任务.durationMs = 0;
+    stats.当前任务.lastSuccessTime = 0;
+    stats.当前任务.limit = parseInt(控件信息.操作阈值) || 0;
+    stats.当前任务.currentPage = parseInt(page) || 1;
+    保存控件信息();
+    刷新写作业统计页面();
+}
+
+function 结束写作业统计(statusText) {
+    let stats = 获取写作业统计();
+    if (stats.当前任务.running) {
+        stats.当前任务.endTime = Date.now();
+        stats.当前任务.durationMs = Math.max(0, stats.当前任务.endTime - (stats.当前任务.startTime || stats.当前任务.endTime));
+        stats.当前任务.running = false;
+    } else if (stats.当前任务.startTime > 0) {
+        let endTime = stats.当前任务.endTime || Date.now();
+        stats.当前任务.endTime = endTime;
+        stats.当前任务.durationMs = Math.max(0, endTime - stats.当前任务.startTime);
+    }
+    stats.当前任务.statusText = statusText || stats.当前任务.statusText || "已停止";
+    stats.当前任务.currentPage = parseInt(page) || stats.当前任务.currentPage || 1;
+    stats.当前任务.limit = parseInt(控件信息.操作阈值) || stats.当前任务.limit || 0;
+    刷新写作业统计来源(stats);
+    保存控件信息();
+    刷新写作业统计页面();
+}
+
+function 标准化统计性别(value) {
+    let text = String(value || "").trim();
+    if (text.indexOf("男") != -1) return "男";
+    if (text.indexOf("女") != -1) return "女";
+    return "未知";
+}
+
+function 提取写作业统计等级(jsonData) {
+    if (!jsonData || typeof jsonData != "object") return "未知";
+    let keys = ["level_text", "level", "grade", "grade_text", "vip_level", "rank", "rank_text"];
+    for (let i = 0; i < keys.length; i++) {
+        let value = jsonData[keys[i]];
+        if (value !== undefined && value !== null && String(value).trim() !== "") {
+            return String(value).trim();
+        }
+    }
+    return "未知";
+}
+
+function 创建写作业统计元信息(res, rawItem) {
+    let isLocal = !!(res && res.type == "local_id");
+    let meta = {
+        sourceType: isLocal ? "本地ID" : "云端ID",
+        rawItem: rawItem,
+        id: "",
+        gender: "未知",
+        level: "未知",
+        jsonData: {}
+    };
+
+    if (isLocal) {
+        meta.id = String(rawItem || "").trim();
+        return meta;
+    }
+
+    let content = rawItem ? rawItem.content : null;
+    let jsonData = {};
+    if (typeof content == "string") {
+        try {
+            jsonData = JSON.parse(content || "{}") || {};
+        } catch (e) {
+            jsonData = {};
+        }
+    } else if (content && typeof content == "object") {
+        jsonData = content;
+    }
+
+    meta.jsonData = jsonData || {};
+    meta.gender = 标准化统计性别(meta.jsonData.gender_text);
+    meta.level = 提取写作业统计等级(meta.jsonData);
+    try {
+        meta.id = getIdReg(typeof content == "string" ? content : JSON.stringify(content || {})) || "";
+    } catch (e) {
+        meta.id = "";
+    }
+    return meta;
+}
+
+function 写作业统计记录最近(status, meta, reason, idStr) {
+    let stats = 获取写作业统计();
+    let actions = [];
+    if (控件信息.私信用户_box) actions.push("私信");
+    if (控件信息.拨打语音_box) actions.push("发语音条");
+    if (控件信息.发送图片_box) actions.push("发图");
+    stats.最近记录.unshift({
+        time: Date.now(),
+        status: status || "unknown",
+        reason: reason || "",
+        id: idStr || (meta && meta.id) || "-",
+        gender: (meta && meta.gender) || "未知",
+        level: String((meta && meta.level) || "未知"),
+        sourceType: (meta && meta.sourceType) || "-",
+        action: actions.join("+") || "-"
+    });
+    if (stats.最近记录.length > 20) {
+        stats.最近记录 = stats.最近记录.slice(0, 20);
+    }
+}
+
+function 记录写作业统计取数(res) {
+    if (!res || !res.data || !Array.isArray(res.data.data) || res.data.data.length <= 0) return;
+    let stats = 获取写作业统计();
+    let count = res.data.data.length;
+    stats.总览.loadedCount += count;
+    if (res.type == "local_id") {
+        stats.来源统计.localCount += count;
+    } else {
+        stats.来源统计.remoteCount += count;
+    }
+    stats.当前任务.currentPage = parseInt(page) || stats.当前任务.currentPage || 1;
+    刷新写作业统计来源(stats);
+    保存控件信息();
+    请求刷新写作业统计页面();
+}
+
+function 记录写作业统计处理开始(meta) {
+    let stats = 获取写作业统计();
+    stats.总览.processedCount += 1;
+    stats.当前任务.currentPage = parseInt(page) || stats.当前任务.currentPage || 1;
+    let gender = meta && meta.gender ? meta.gender : "未知";
+    if (!stats.性别分布.hasOwnProperty(gender)) gender = "未知";
+    stats.性别分布[gender] += 1;
+    let level = String((meta && meta.level) || "未知").trim() || "未知";
+    stats.等级分布[level] = (stats.等级分布[level] || 0) + 1;
+    if (meta && meta.sourceType) {
+        stats.当前任务.sourceType = meta.sourceType;
+    }
+    保存控件信息();
+    请求刷新写作业统计页面();
+}
+
+function 记录写作业统计跳过(reason, meta) {
+    let stats = 获取写作业统计();
+    reason = stats.跳过分布.hasOwnProperty(reason) ? reason : "其他";
+    stats.总览.skipCount += 1;
+    stats.跳过分布[reason] += 1;
+    写作业统计记录最近("skip", meta, reason);
+    保存控件信息();
+    请求刷新写作业统计页面();
+}
+
+function 记录写作业统计失败(reason, meta) {
+    let stats = 获取写作业统计();
+    stats.总览.failCount += 1;
+    写作业统计记录最近("fail", meta, reason || "失败");
+    保存控件信息();
+    请求刷新写作业统计页面();
+}
+
+function 记录写作业统计成功(idStr, meta) {
+    let stats = 获取写作业统计();
+    let now = Date.now();
+    stats.总览.successCount += 1;
+    stats.当前任务.lastSuccessTime = now;
+    let hour = new Date(now).getHours();
+    let hourKey = (hour < 10 ? "0" : "") + hour;
+    stats.时间分布[hourKey] = (stats.时间分布[hourKey] || 0) + 1;
+    if (控件信息.私信用户_box) stats.操作分布.私信 += 1;
+    if (控件信息.拨打语音_box) stats.操作分布.发语音条 += 1;
+    if (控件信息.发送图片_box) stats.操作分布.发图 += 1;
+    写作业统计记录最近("success", meta, "", idStr);
+    保存控件信息();
+    请求刷新写作业统计页面(true);
+}
+
+function 格式化写作业统计时间(ts) {
+    if (!ts) return "-";
+    let d = new Date(ts);
+    let y = d.getFullYear();
+    let m = ("0" + (d.getMonth() + 1)).slice(-2);
+    let day = ("0" + d.getDate()).slice(-2);
+    let h = ("0" + d.getHours()).slice(-2);
+    let mm = ("0" + d.getMinutes()).slice(-2);
+    let s = ("0" + d.getSeconds()).slice(-2);
+    return y + "-" + m + "-" + day + " " + h + ":" + mm + ":" + s;
+}
+
+function 格式化写作业统计时长(ms) {
+    let totalSeconds = Math.max(0, Math.floor((parseInt(ms) || 0) / 1000));
+    let hour = Math.floor(totalSeconds / 3600);
+    let minute = Math.floor((totalSeconds % 3600) / 60);
+    let second = totalSeconds % 60;
+    if (hour > 0) return hour + "小时" + minute + "分" + second + "秒";
+    if (minute > 0) return minute + "分" + second + "秒";
+    return second + "秒";
+}
+
+function 获取写作业统计成功率(stats) {
+    stats = stats || 获取写作业统计();
+    let processed = stats.总览.processedCount || 0;
+    if (processed <= 0) return "0%";
+    return ((stats.总览.successCount || 0) * 100 / processed).toFixed(1) + "%";
+}
+
+function 获取写作业统计对象摘要(obj, formatter, limit, emptyText) {
+    let entries = Object.keys(obj || {}).map(function (key) {
+        return [key, obj[key] || 0];
+    }).filter(function (item) {
+        return item[1] > 0;
+    }).sort(function (a, b) {
+        return b[1] - a[1];
+    });
+    if (limit && entries.length > limit) {
+        entries = entries.slice(0, limit);
+    }
+    if (entries.length <= 0) return emptyText || "暂无数据";
+    return entries.map(function (item) {
+        return formatter ? formatter(item[0], item[1]) : (item[0] + "：" + item[1]);
+    }).join("\n");
+}
+
+function 获取写作业统计最近记录摘要(stats) {
+    stats = stats || 获取写作业统计();
+    if (!stats.最近记录 || stats.最近记录.length <= 0) return "暂无记录";
+    return stats.最近记录.slice(0, 6).map(function (item) {
+        let statusText = item.status == "success" ? "成功" : (item.status == "skip" ? "跳过" : "失败");
+        let timeText = 格式化写作业统计时间(item.time);
+        let shortTime = timeText == "-" ? "-" : timeText.slice(11);
+        let reasonText = item.reason ? (" · " + item.reason) : "";
+        return shortTime + " · " + statusText + " · " + (item.id || "-") + reasonText;
+    }).join("\n");
+}
+
+function 请求刷新写作业统计页面(force) {
+    let now = Date.now();
+    if (!force && now - 上次写作业统计刷新时间 < 350) return;
+    上次写作业统计刷新时间 = now;
+    刷新写作业统计页面();
+}
+
+function 刷新写作业统计页面() {
+    let stats = 获取写作业统计();
+    if (stats.当前任务.running && stats.当前任务.startTime > 0) {
+        stats.当前任务.durationMs = Math.max(0, Date.now() - stats.当前任务.startTime);
+    }
+    刷新写作业统计来源(stats);
+    let successRate = 获取写作业统计成功率(stats);
+    let progressValue = 0;
+    if ((stats.总览.processedCount || 0) > 0) {
+        progressValue = Math.max(0, Math.min(100, Math.round((stats.总览.successCount || 0) * 100 / stats.总览.processedCount)));
+    }
+
+    ui.run(function () {
+        if (ui.统计已加载值) ui.统计已加载值.setText(String(stats.总览.loadedCount || 0));
+        if (ui.统计已处理值) ui.统计已处理值.setText(String(stats.总览.processedCount || 0));
+        if (ui.统计已成功值) ui.统计已成功值.setText(String(stats.总览.successCount || 0));
+        if (ui.统计成功率值) ui.统计成功率值.setText(successRate);
+        if (ui.统计成功率进度) ui.统计成功率进度.setProgress(progressValue);
+        if (ui.统计任务状态) ui.统计任务状态.setText(stats.当前任务.statusText || "未运行");
+        if (ui.统计当前平台) ui.统计当前平台.setText(stats.当前任务.platform || "-");
+        if (ui.统计数据来源) ui.统计数据来源.setText(stats.当前任务.sourceType || "-");
+        if (ui.统计开始时间) ui.统计开始时间.setText(格式化写作业统计时间(stats.当前任务.startTime));
+        if (ui.统计运行时长) ui.统计运行时长.setText(格式化写作业统计时长(stats.当前任务.durationMs));
+        if (ui.统计最后成功) ui.统计最后成功.setText(格式化写作业统计时间(stats.当前任务.lastSuccessTime));
+        if (ui.统计来源统计) ui.统计来源统计.setText("本地ID：" + (stats.来源统计.localCount || 0) + "\n云端ID：" + (stats.来源统计.remoteCount || 0));
+        if (ui.统计性别统计) ui.统计性别统计.setText("男：" + (stats.性别分布.男 || 0) + "\n女：" + (stats.性别分布.女 || 0) + "\n未知：" + (stats.性别分布.未知 || 0));
+        if (ui.统计操作统计) ui.统计操作统计.setText("私信：" + (stats.操作分布.私信 || 0) + "\n发语音条：" + (stats.操作分布.发语音条 || 0) + "\n发图：" + (stats.操作分布.发图 || 0));
+        if (ui.统计跳过统计) ui.统计跳过统计.setText(获取写作业统计对象摘要(stats.跳过分布, function (key, value) {
+            return key + "：" + value;
+        }, 8, "暂无跳过记录"));
+        if (ui.统计等级统计) ui.统计等级统计.setText(获取写作业统计对象摘要(stats.等级分布, function (key, value) {
+            return key + "：" + value;
+        }, 8, "暂无等级数据"));
+        if (ui.统计时间统计) ui.统计时间统计.setText(获取写作业统计对象摘要(stats.时间分布, function (key, value) {
+            return key + "点：" + value;
+        }, 8, "暂无时间分布"));
+        if (ui.统计最近记录) ui.统计最近记录.setText(获取写作业统计最近记录摘要(stats));
+    });
 }
 
 function 会员日志功能可用() {
@@ -2351,6 +2754,131 @@ function 首页ui() {
                                 </vertical>
                             </scroll >
 
+                            <scroll>
+                                <vertical w="*" h="*" padding="12dp">
+                                    <horizontal w="*" gravity="center_vertical" marginBottom="10dp">
+                                        <text text="写作业统计" textSize="18sp" textStyle="bold" textColor="#333333" layout_weight="1" />
+                                        <card w="78dp" h="32dp" cardCornerRadius="16dp" cardBackgroundColor="#26b3c6" cardElevation="0dp">
+                                            <vertical id="刷新统计按钮" w="*" h="*" gravity="center">
+                                                <text text="刷新" textColor="#FFFFFF" textStyle="bold" textSize="13sp" />
+                                            </vertical>
+                                        </card>
+                                        <card w="88dp" h="32dp" cardCornerRadius="16dp" cardBackgroundColor="#FFFFFF" cardElevation="0dp" marginLeft="8dp">
+                                            <vertical id="清空统计按钮" w="*" h="*" gravity="center">
+                                                <text text="清空本次" textColor="#26b3c6" textStyle="bold" textSize="13sp" />
+                                            </vertical>
+                                        </card>
+                                    </horizontal>
+
+                                    <horizontal w="*" marginBottom="8dp">
+                                        <card w="0" layout_weight="1" h="88dp" marginRight="4dp" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp">
+                                            <vertical padding="12dp" gravity="center_vertical">
+                                                <text text="已加载ID" textSize="13sp" textColor="#666666" />
+                                                <text id="统计已加载值" text="0" textSize="24sp" textStyle="bold" textColor="#333333" marginTop="8dp" />
+                                            </vertical>
+                                        </card>
+                                        <card w="0" layout_weight="1" h="88dp" marginLeft="4dp" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp">
+                                            <vertical padding="12dp" gravity="center_vertical">
+                                                <text text="已处理" textSize="13sp" textColor="#666666" />
+                                                <text id="统计已处理值" text="0" textSize="24sp" textStyle="bold" textColor="#333333" marginTop="8dp" />
+                                            </vertical>
+                                        </card>
+                                    </horizontal>
+
+                                    <horizontal w="*" marginBottom="10dp">
+                                        <card w="0" layout_weight="1" h="88dp" marginRight="4dp" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp">
+                                            <vertical padding="12dp" gravity="center_vertical">
+                                                <text text="已写成功" textSize="13sp" textColor="#666666" />
+                                                <text id="统计已成功值" text="0" textSize="24sp" textStyle="bold" textColor="#333333" marginTop="8dp" />
+                                            </vertical>
+                                        </card>
+                                        <card w="0" layout_weight="1" h="88dp" marginLeft="4dp" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp">
+                                            <vertical padding="12dp" gravity="center_vertical">
+                                                <text text="成功率" textSize="13sp" textColor="#666666" />
+                                                <text id="统计成功率值" text="0%" textSize="24sp" textStyle="bold" textColor="#333333" marginTop="8dp" />
+                                            </vertical>
+                                        </card>
+                                    </horizontal>
+
+                                    <card w="*" h="auto" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp" marginBottom="10dp">
+                                        <vertical padding="12dp">
+                                            <text text="成功率进度" textSize="14sp" textStyle="bold" textColor="#333333" />
+                                            <progressbar id="统计成功率进度" style="?android:attr/progressBarStyleHorizontal" progress="0" max="100" w="*" marginTop="8dp" />
+                                        </vertical>
+                                    </card>
+
+                                    <card w="*" h="auto" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp" marginBottom="10dp">
+                                        <vertical padding="12dp">
+                                            <text text="任务概览" textSize="15sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
+                                            <text text="当前状态" textSize="12sp" textColor="#666666" />
+                                            <text id="统计任务状态" text="未运行" textSize="15sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
+                                            <text text="当前平台" textSize="12sp" textColor="#666666" />
+                                            <text id="统计当前平台" text="-" textSize="14sp" textColor="#333333" marginBottom="8dp" />
+                                            <text text="数据来源" textSize="12sp" textColor="#666666" />
+                                            <text id="统计数据来源" text="-" textSize="14sp" textColor="#333333" marginBottom="8dp" />
+                                            <text text="开始时间" textSize="12sp" textColor="#666666" />
+                                            <text id="统计开始时间" text="-" textSize="14sp" textColor="#333333" marginBottom="8dp" />
+                                            <text text="运行时长" textSize="12sp" textColor="#666666" />
+                                            <text id="统计运行时长" text="0秒" textSize="14sp" textColor="#333333" marginBottom="8dp" />
+                                            <text text="最近成功时间" textSize="12sp" textColor="#666666" />
+                                            <text id="统计最后成功" text="-" textSize="14sp" textColor="#333333" />
+                                        </vertical>
+                                    </card>
+
+                                    <horizontal w="*" marginBottom="10dp">
+                                        <card w="0" layout_weight="1" h="auto" marginRight="4dp" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp">
+                                            <vertical padding="12dp">
+                                                <text text="来源统计" textSize="14sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
+                                                <text id="统计来源统计" text="本地ID：0\n云端ID：0" textSize="13sp" textColor="#444444" lineSpacingExtra="4dp" />
+                                            </vertical>
+                                        </card>
+                                        <card w="0" layout_weight="1" h="auto" marginLeft="4dp" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp">
+                                            <vertical padding="12dp">
+                                                <text text="性别分布" textSize="14sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
+                                                <text id="统计性别统计" text="男：0\n女：0\n未知：0" textSize="13sp" textColor="#444444" lineSpacingExtra="4dp" />
+                                            </vertical>
+                                        </card>
+                                    </horizontal>
+
+                                    <horizontal w="*" marginBottom="10dp">
+                                        <card w="0" layout_weight="1" h="auto" marginRight="4dp" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp">
+                                            <vertical padding="12dp">
+                                                <text text="操作分布" textSize="14sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
+                                                <text id="统计操作统计" text="私信：0\n发语音条：0\n发图：0" textSize="13sp" textColor="#444444" lineSpacingExtra="4dp" />
+                                            </vertical>
+                                        </card>
+                                        <card w="0" layout_weight="1" h="auto" marginLeft="4dp" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp">
+                                            <vertical padding="12dp">
+                                                <text text="跳过原因" textSize="14sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
+                                                <text id="统计跳过统计" text="暂无跳过记录" textSize="13sp" textColor="#444444" lineSpacingExtra="4dp" />
+                                            </vertical>
+                                        </card>
+                                    </horizontal>
+
+                                    <horizontal w="*" marginBottom="10dp">
+                                        <card w="0" layout_weight="1" h="auto" marginRight="4dp" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp">
+                                            <vertical padding="12dp">
+                                                <text text="等级分布" textSize="14sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
+                                                <text id="统计等级统计" text="暂无等级数据" textSize="13sp" textColor="#444444" lineSpacingExtra="4dp" />
+                                            </vertical>
+                                        </card>
+                                        <card w="0" layout_weight="1" h="auto" marginLeft="4dp" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp">
+                                            <vertical padding="12dp">
+                                                <text text="时间统计" textSize="14sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
+                                                <text id="统计时间统计" text="暂无时间分布" textSize="13sp" textColor="#444444" lineSpacingExtra="4dp" />
+                                            </vertical>
+                                        </card>
+                                    </horizontal>
+
+                                    <card w="*" h="auto" cardCornerRadius="12dp" cardBackgroundColor="#F1F9FA" cardElevation="0dp" marginBottom="20dp">
+                                        <vertical padding="12dp">
+                                            <text text="最近记录" textSize="15sp" textStyle="bold" textColor="#333333" marginBottom="8dp" />
+                                            <text id="统计最近记录" text="暂无记录" textSize="13sp" textColor="#444444" lineSpacingExtra="4dp" />
+                                        </vertical>
+                                    </card>
+                                </vertical>
+                            </scroll>
+
                         </viewpager>
 
                     </vertical >
@@ -2462,11 +2990,18 @@ function 首页ui() {
         </frame >
     );
 
-    ui.viewpager.setTitles(["运行设置", "使用教程"]);
+    ui.viewpager.setTitles(["运行设置", "使用教程", "写作业统计"]);
     ui.tabs.setupWithViewPager(ui.viewpager);
     ui.操作记录list && ui.操作记录list.setDataSource(控件信息.操作记录list || []);
     刷新日志入口状态();
     加载使用教程页面();
+    刷新写作业统计页面();
+    if (!写作业统计自动刷新已启动) {
+        写作业统计自动刷新已启动 = true;
+        setInterval(function () {
+            刷新写作业统计页面();
+        }, 1000);
+    }
     ui.充值按钮 && ui.充值按钮.on("click", function () {
         threads.start(function () {
             打开充值弹窗();
@@ -2489,6 +3024,19 @@ function 首页ui() {
     });
     ui.清空音频选择 && ui.清空音频选择.on("click", function () {
         清空已选音频();
+    });
+    ui.刷新统计按钮 && ui.刷新统计按钮.on("click", function () {
+        刷新写作业统计页面();
+        toastLog("统计已刷新");
+    });
+    ui.清空统计按钮 && ui.清空统计按钮.on("click", function () {
+        let stats = 获取写作业统计();
+        if (stats.当前任务.running) {
+            toastLog("运行中请先停止任务");
+            return;
+        }
+        重置写作业统计(aimAPP || ui.platForms.getSelectedItem() || "-");
+        toastLog("本次统计已清空");
     });
     刷新我的页面();
     刷新操作记录统计();
@@ -2655,6 +3203,7 @@ function 首页ui() {
         if (!悬浮窗线程.isAlive()) {
             myConsole("启动悬浮窗")
             aimAPP = ui.platForms.getSelectedItem()
+            开始写作业统计(aimAPP)
             platForms = adjustIndex(platForms, aimAPP)
             console.log("aimAPP")
             console.log(aimAPP)
@@ -2911,68 +3460,81 @@ function checkInstallApp() {
 }
 
 function 主程序() {
-
-    console.log(控件信息)
-    pressOk()
-    actionSpeed = RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-    home()
-    listenserInOtherPage()
-    sleep(3000)
-    toastLog("启动APP" + aimAPP)
-
-    if (aimAPP === "咪鸭") {
-        idType = "page_data_9"
-        apkPackage = "com.jiuyin.mc"
-        appVersion = "1.6.51"
-        fullIdPre = "com.jiuyin.mc:id/"
-        app.launchApp("咪鸭")
-        if (checkInstallApp()) {
-            miya_idTask()
-        }
-    } else if (aimAPP == "PP") {
-        idType = "page_data_26"
-        apkPackage = "com.lizhi.pplive"
-        appVersion = "7.15.0"
-        fullIdPre = "com.lizhi.pplive:id/"
-        app.launchApp("PP")
-        if (checkInstallApp()) {
-            PP_idTask()
-        }
-    } else if (aimAPP == "蓝伴语音") {
-        idType = "page_data_33"
-        apkPackage = "com.nanshan.blue.companion"
-        appVersion = "2.6.5"
-        fullIdPre = "com.nanshan.blue.companion:id/"
-        app.launchApp("蓝伴语音")
-        if (checkInstallApp()) {
-            LanBan_idTask()
-        }
-    } else if (aimAPP == "捞月狗") {
-        idType = "page_data_5"
-        apkPackage = "com.laoyuegou.android"
-        appVersion = "5.5.6"
-        fullIdPre = "com.laoyuegou.android:id/"
-        app.launchApp("捞月狗")
-        if (checkInstallApp()) {
-            LaoYueGou_idTask()
-        }
-    } else if (aimAPP == "不二开黑") {
-        idType = "page_data_15"
-        apkPackage = "com.buerkaihei.meet"
-        appVersion = "5.5.6"
-        fullIdPre = "com.buerkaihei.meet:id/"
-        app.launchApp("不二开黑")
-        if (checkInstallApp()) {
-            BuerKaiHei_idTask()
-        }
-    } else {
-        toastLog(aimAPP + "正在升级，敬请期待...")
-        dialogs.build({
-            title: "友情提示",
-            content: aimAPP + "正在升级，敬请期待...",
-            positive: "确定",
-        }).show();
+    let 写作业统计结束状态 = "已完成";
+    try {
+        console.log(控件信息)
+        pressOk()
+        actionSpeed = RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+        home()
+        listenserInOtherPage()
         sleep(3000)
+        toastLog("启动APP" + aimAPP)
+
+        if (aimAPP === "咪鸭") {
+            idType = "page_data_9"
+            apkPackage = "com.jiuyin.mc"
+            appVersion = "1.6.51"
+            fullIdPre = "com.jiuyin.mc:id/"
+            app.launchApp("咪鸭")
+            if (checkInstallApp()) {
+                miya_idTask()
+            }
+        } else if (aimAPP == "PP") {
+            idType = "page_data_26"
+            apkPackage = "com.lizhi.pplive"
+            appVersion = "7.15.0"
+            fullIdPre = "com.lizhi.pplive:id/"
+            app.launchApp("PP")
+            if (checkInstallApp()) {
+                PP_idTask()
+            }
+        } else if (aimAPP == "蓝伴语音") {
+            idType = "page_data_33"
+            apkPackage = "com.nanshan.blue.companion"
+            appVersion = "2.6.5"
+            fullIdPre = "com.nanshan.blue.companion:id/"
+            app.launchApp("蓝伴语音")
+            if (checkInstallApp()) {
+                LanBan_idTask()
+            }
+        } else if (aimAPP == "捞月狗") {
+            idType = "page_data_5"
+            apkPackage = "com.laoyuegou.android"
+            appVersion = "5.5.6"
+            fullIdPre = "com.laoyuegou.android:id/"
+            app.launchApp("捞月狗")
+            if (checkInstallApp()) {
+                LaoYueGou_idTask()
+            }
+        } else if (aimAPP == "不二开黑") {
+            idType = "page_data_15"
+            apkPackage = "com.buerkaihei.meet"
+            appVersion = "5.5.6"
+            fullIdPre = "com.buerkaihei.meet:id/"
+            app.launchApp("不二开黑")
+            if (checkInstallApp()) {
+                BuerKaiHei_idTask()
+            }
+        } else {
+            toastLog(aimAPP + "正在升级，敬请期待...")
+            dialogs.build({
+                title: "友情提示",
+                content: aimAPP + "正在升级，敬请期待...",
+                positive: "确定",
+            }).show();
+            sleep(3000)
+        }
+    } catch (error) {
+        let errText = String(error || "");
+        if (errText.indexOf("InterruptedException") != -1 || errText.indexOf("script exiting") != -1) {
+            写作业统计结束状态 = "已停止";
+        } else {
+            写作业统计结束状态 = "异常结束";
+            console.error(error);
+        }
+        throw error;
+    } finally {
+        结束写作业统计(写作业统计结束状态);
     }
 
     返回ui页()
@@ -3008,21 +3570,24 @@ function BuerKaiHei_idTask() {
             for (let i = 0; i < res.data.data.length; i++) {
                 // 开始
                 randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let 当前统计元信息 = 创建写作业统计元信息(res, res.data.data[i])
+                if (!(res.hasOwnProperty("type") && res["type"] == "local_id") && timer >= parseInt(控件信息.操作阈值)) {
+                    toastLog("达到操作阈值，任务停止...")
+                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    return
+                }
+                记录写作业统计处理开始(当前统计元信息)
                 if (res.hasOwnProperty("type") && res["type"] == "local_id") {
-                    idStr = res.data.data[i]
+                    idStr = 当前统计元信息.id
                 } else {
-                    if (timer >= parseInt(控件信息.操作阈值)) {
-                        toastLog("达到操作阈值，任务停止...")
-                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                        return
-                    }
                     let sex = judgeSex()
-                    let jsonData = JSON.parse(res.data.data[i]["content"])
+                    let jsonData = 当前统计元信息.jsonData || {}
                     // console.log("当前数据:" + JSON.stringify(jsonData))
                     if (sex !== "") {
                         console.log("进入性别判断")
                         if (jsonData["gender_text"] !== sex) {
                             myConsole("性别" + jsonData["gender_text"] + "不符合")
+                            记录写作业统计跳过("性别不符", 当前统计元信息)
                             continue
                         }
                     }
@@ -3031,6 +3596,7 @@ function BuerKaiHei_idTask() {
                         console.log("进入主播判断")
                         if (jsonData["is_anchor"] !== isAnchor) {
                             myConsole("模特" + jsonData["is_anchor"] + "不符合")
+                            记录写作业统计跳过("模特过滤", 当前统计元信息)
                             continue
                         }
                     }
@@ -3040,23 +3606,29 @@ function BuerKaiHei_idTask() {
                         let isOk = judgMoneyValue(moneyValue)
                         if (!isOk) {
                             myConsole("消费范围" + moneyValue + "不符合")
+                            记录写作业统计跳过("消费范围不符", 当前统计元信息)
                             continue
                         }
                     }
-                    idStr = getIdReg(res.data.data[i]["content"])
-                    if (!idStr) {
-                        myConsole(res.data.data[i]["content"] + "===>" + idStr)
-                        continue
-                    }
+                    idStr = 当前统计元信息.id
                 }
+                当前统计元信息.id = idStr ? String(idStr).trim() : ""
+                if (!当前统计元信息.id) {
+                    myConsole((res.data.data[i]["content"] || res.data.data[i]) + "===>" + idStr)
+                    记录写作业统计跳过("ID解析失败", 当前统计元信息)
+                    continue
+                }
+                idStr = 当前统计元信息.id
                 if (控件信息.重复不写_box) {
                     if (long_cache.indexOf(idStr) != -1) {
                         myConsole("long_cache idStr: " + idStr + "已存在缓存")
+                        记录写作业统计跳过("重复不写", 当前统计元信息)
                         continue
                     }
                 } else {
                     if (cache.indexOf(idStr) != -1) {
                         myConsole("idStr: " + idStr + "已存在缓存")
+                        记录写作业统计跳过("重复不写", 当前统计元信息)
                         continue
                     }
                 }
@@ -3110,6 +3682,7 @@ function BuerKaiHei_idTask() {
                 let enterBtn = loopResultTextTimer("聊一聊", 5)
                 if (!enterBtn) {
                     myConsole("id: " + id + "没有可以打招呼的按钮")
+                    记录写作业统计跳过("无法进入聊天", 当前统计元信息)
                     // if (textContains("是否").visibleToUser(true).findOnce()) {
                     //     clickCenterByObj(loopResultTextTimer("取消", 2))
                     // }
@@ -3163,6 +3736,7 @@ function BuerKaiHei_idTask() {
                         }
                     } else {
                         myConsole("id: " + id + "点击图片失败")
+                        记录写作业统计失败("图片发送失败", 当前统计元信息)
                         backIndexId(fullIdPre + "et_search")
                         continue
                     }
@@ -3192,6 +3766,7 @@ function BuerKaiHei_idTask() {
                     RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
                     clickCenterByObj(loopResultIdTimer(fullIdPre + "ps_tv_complete", 3))
                 }
+                记录写作业统计成功(idStr, 当前统计元信息)
                 timer++
                 let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
                 toastLog("等待" + sleepTime + "秒")
@@ -3246,21 +3821,24 @@ function LaoYueGou_idTask() {
             for (let i = 0; i < res.data.data.length; i++) {
                 // 开始
                 randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let 当前统计元信息 = 创建写作业统计元信息(res, res.data.data[i])
+                if (!(res.hasOwnProperty("type") && res["type"] == "local_id") && timer >= parseInt(控件信息.操作阈值)) {
+                    toastLog("达到操作阈值，任务停止...")
+                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    return
+                }
+                记录写作业统计处理开始(当前统计元信息)
                 if (res.hasOwnProperty("type") && res["type"] == "local_id") {
-                    idStr = res.data.data[i]
+                    idStr = 当前统计元信息.id
                 } else {
-                    if (timer >= parseInt(控件信息.操作阈值)) {
-                        toastLog("达到操作阈值，任务停止...")
-                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                        return
-                    }
                     let sex = judgeSex()
-                    let jsonData = JSON.parse(res.data.data[i]["content"])
+                    let jsonData = 当前统计元信息.jsonData || {}
                     // console.log("当前数据:" + JSON.stringify(jsonData))
                     if (sex !== "") {
                         console.log("进入性别判断")
                         if (jsonData["gender_text"] !== sex) {
                             myConsole("性别" + jsonData["gender_text"] + "不符合")
+                            记录写作业统计跳过("性别不符", 当前统计元信息)
                             continue
                         }
                     }
@@ -3269,6 +3847,7 @@ function LaoYueGou_idTask() {
                         console.log("进入主播判断")
                         if (jsonData["is_anchor"] !== isAnchor) {
                             myConsole("模特" + jsonData["is_anchor"] + "不符合")
+                            记录写作业统计跳过("模特过滤", 当前统计元信息)
                             continue
                         }
                     }
@@ -3278,23 +3857,29 @@ function LaoYueGou_idTask() {
                         let isOk = judgMoneyValue(moneyValue)
                         if (!isOk) {
                             myConsole("消费范围" + moneyValue + "不符合")
+                            记录写作业统计跳过("消费范围不符", 当前统计元信息)
                             continue
                         }
                     }
-                    idStr = getIdReg(res.data.data[i]["content"])
-                    if (!idStr) {
-                        myConsole(res.data.data[i]["content"] + "===>" + idStr)
-                        continue
-                    }
+                    idStr = 当前统计元信息.id
                 }
+                当前统计元信息.id = idStr ? String(idStr).trim() : ""
+                if (!当前统计元信息.id) {
+                    myConsole((res.data.data[i]["content"] || res.data.data[i]) + "===>" + idStr)
+                    记录写作业统计跳过("ID解析失败", 当前统计元信息)
+                    continue
+                }
+                idStr = 当前统计元信息.id
                 if (控件信息.重复不写_box) {
                     if (long_cache.indexOf(idStr) != -1) {
                         myConsole("long_cache idStr: " + idStr + "已存在缓存")
+                        记录写作业统计跳过("重复不写", 当前统计元信息)
                         continue
                     }
                 } else {
                     if (cache.indexOf(idStr) != -1) {
                         myConsole("idStr: " + idStr + "已存在缓存")
+                        记录写作业统计跳过("重复不写", 当前统计元信息)
                         continue
                     }
                 }
@@ -3328,6 +3913,7 @@ function LaoYueGou_idTask() {
                 let aimUser = loopResultTextTimer("狗号：" + idStr.trim(), 5)
                 if (!aimUser) {
                     myConsole("idStr: " + idStr + "无效ID")
+                    记录写作业统计跳过("搜索无结果", 当前统计元信息)
                     continue
                 }
                 randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
@@ -3335,6 +3921,7 @@ function LaoYueGou_idTask() {
                 let atMai = loopResultTextTimer("在麦上", 2)
                 if (atMai) {
                     myConsole("idStr: " + idStr + "在麦上,跳过")
+                    记录写作业统计跳过("无法进入聊天", 当前统计元信息)
                     continue
                 }
                 if (aimUser) {
@@ -3348,6 +3935,7 @@ function LaoYueGou_idTask() {
                 let enterBtn = loopResultTextTimer("私聊", 5)
                 if (!enterBtn) {
                     myConsole("id: " + id + "没有可以打招呼的按钮")
+                    记录写作业统计跳过("无法进入聊天", 当前统计元信息)
                     if (textContains("是否").visibleToUser(true).findOnce()) {
                         clickCenterByObj(loopResultTextTimer("取消", 2))
                     }
@@ -3389,6 +3977,7 @@ function LaoYueGou_idTask() {
                         }
                     } else {
                         myConsole("id: " + id + "点击图片失败")
+                        记录写作业统计失败("图片发送失败", 当前统计元信息)
                         backIndex("取消")
                         continue
                     }
@@ -3418,6 +4007,7 @@ function LaoYueGou_idTask() {
                     RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
                     clickCenterByObj(loopResultIdTimer(fullIdPre + "c86", 3))
                 }
+                记录写作业统计成功(idStr, 当前统计元信息)
                 timer++
                 let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
                 toastLog("等待" + sleepTime + "秒")
@@ -3467,21 +4057,24 @@ function LanBan_idTask() {
             for (let i = 0; i < res.data.data.length; i++) {
                 // 开始
                 randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let 当前统计元信息 = 创建写作业统计元信息(res, res.data.data[i])
+                if (!(res.hasOwnProperty("type") && res["type"] == "local_id") && timer >= parseInt(控件信息.操作阈值)) {
+                    toastLog("达到操作阈值，任务停止...")
+                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    return
+                }
+                记录写作业统计处理开始(当前统计元信息)
                 if (res.hasOwnProperty("type") && res["type"] == "local_id") {
-                    idStr = res.data.data[i]
+                    idStr = 当前统计元信息.id
                 } else {
-                    if (timer >= parseInt(控件信息.操作阈值)) {
-                        toastLog("达到操作阈值，任务停止...")
-                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                        return
-                    }
                     let sex = judgeSex()
-                    let jsonData = JSON.parse(res.data.data[i]["content"])
+                    let jsonData = 当前统计元信息.jsonData || {}
                     // console.log("当前数据:" + JSON.stringify(jsonData))
                     if (sex !== "") {
                         console.log("进入性别判断")
                         if (jsonData["gender_text"] !== sex) {
                             myConsole("性别" + jsonData["gender_text"] + "不符合")
+                            记录写作业统计跳过("性别不符", 当前统计元信息)
                             continue
                         }
                     }
@@ -3490,6 +4083,7 @@ function LanBan_idTask() {
                         console.log("进入主播判断")
                         if (jsonData["is_anchor"] !== isAnchor) {
                             myConsole("模特" + jsonData["is_anchor"] + "不符合")
+                            记录写作业统计跳过("模特过滤", 当前统计元信息)
                             continue
                         }
                     }
@@ -3499,23 +4093,29 @@ function LanBan_idTask() {
                         let isOk = judgMoneyValue(moneyValue)
                         if (!isOk) {
                             myConsole("消费范围" + moneyValue + "不符合")
+                            记录写作业统计跳过("消费范围不符", 当前统计元信息)
                             continue
                         }
                     }
-                    idStr = getIdReg(res.data.data[i]["content"])
-                    if (!idStr) {
-                        myConsole(res.data.data[i]["content"] + "===>" + idStr)
-                        continue
-                    }
+                    idStr = 当前统计元信息.id
                 }
+                当前统计元信息.id = idStr ? String(idStr).trim() : ""
+                if (!当前统计元信息.id) {
+                    myConsole((res.data.data[i]["content"] || res.data.data[i]) + "===>" + idStr)
+                    记录写作业统计跳过("ID解析失败", 当前统计元信息)
+                    continue
+                }
+                idStr = 当前统计元信息.id
                 if (控件信息.重复不写_box) {
                     if (long_cache.indexOf(idStr) != -1) {
                         myConsole("long_cache idStr: " + idStr + "已存在缓存")
+                        记录写作业统计跳过("重复不写", 当前统计元信息)
                         continue
                     }
                 } else {
                     if (cache.indexOf(idStr) != -1) {
                         myConsole("idStr: " + idStr + "已存在缓存")
+                        记录写作业统计跳过("重复不写", 当前统计元信息)
                         continue
                     }
                 }
@@ -3549,6 +4149,7 @@ function LanBan_idTask() {
                 let aimUser = loopResultTextTimer("用户", 5)
                 if (!aimUser) {
                     myConsole("idStr: " + idStr + "无效ID")
+                    记录写作业统计跳过("搜索无结果", 当前统计元信息)
                     clickCenterByObj(loopResultTextTimer("取消", 3))
                     continue
                 }
@@ -3570,6 +4171,7 @@ function LanBan_idTask() {
                     }
                 } else {
                     myConsole("idStr: " + idStr + "无效ID")
+                    记录写作业统计跳过("搜索无结果", 当前统计元信息)
                     // clickCenterByObj(loopResultTextTimer("取消", 3))
                     continue
                 }
@@ -3626,6 +4228,7 @@ function LanBan_idTask() {
                 //     randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
                 //     clickCenterByObj(loopResultTextTimer("下一步", 3))
                 // }
+                记录写作业统计成功(idStr, 当前统计元信息)
                 timer++
                 let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
                 toastLog("等待" + sleepTime + "秒")
@@ -3675,21 +4278,24 @@ function PP_idTask() {
             for (let i = 0; i < res.data.data.length; i++) {
                 // 开始
                 randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                let 当前统计元信息 = 创建写作业统计元信息(res, res.data.data[i])
+                if (!(res.hasOwnProperty("type") && res["type"] == "local_id") && timer >= parseInt(控件信息.操作阈值)) {
+                    toastLog("达到操作阈值，任务停止...")
+                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    return
+                }
+                记录写作业统计处理开始(当前统计元信息)
                 if (res.hasOwnProperty("type") && res["type"] == "local_id") {
-                    idStr = res.data.data[i]
+                    idStr = 当前统计元信息.id
                 } else {
-                    if (timer >= parseInt(控件信息.操作阈值)) {
-                        toastLog("达到操作阈值，任务停止...")
-                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                        return
-                    }
                     let sex = judgeSex()
-                    let jsonData = JSON.parse(res.data.data[i]["content"])
+                    let jsonData = 当前统计元信息.jsonData || {}
                     // console.log("当前数据:" + JSON.stringify(jsonData))
                     if (sex !== "") {
                         console.log("进入性别判断")
                         if (jsonData["gender_text"] !== sex) {
                             myConsole("性别" + jsonData["gender_text"] + "不符合")
+                            记录写作业统计跳过("性别不符", 当前统计元信息)
                             continue
                         }
                     }
@@ -3698,6 +4304,7 @@ function PP_idTask() {
                         console.log("进入主播判断")
                         if (jsonData["is_anchor"] !== isAnchor) {
                             myConsole("模特" + jsonData["is_anchor"] + "不符合")
+                            记录写作业统计跳过("模特过滤", 当前统计元信息)
                             continue
                         }
                     }
@@ -3707,23 +4314,29 @@ function PP_idTask() {
                         let isOk = judgMoneyValue(moneyValue)
                         if (!isOk) {
                             myConsole("消费范围" + moneyValue + "不符合")
+                            记录写作业统计跳过("消费范围不符", 当前统计元信息)
                             continue
                         }
                     }
-                    idStr = getIdReg(res.data.data[i]["content"])
-                    if (!idStr) {
-                        myConsole(res.data.data[i]["content"] + "===>" + idStr)
-                        continue
-                    }
+                    idStr = 当前统计元信息.id
                 }
+                当前统计元信息.id = idStr ? String(idStr).trim() : ""
+                if (!当前统计元信息.id) {
+                    myConsole((res.data.data[i]["content"] || res.data.data[i]) + "===>" + idStr)
+                    记录写作业统计跳过("ID解析失败", 当前统计元信息)
+                    continue
+                }
+                idStr = 当前统计元信息.id
                 if (控件信息.重复不写_box) {
                     if (long_cache.indexOf(idStr) != -1) {
                         myConsole("long_cache idStr: " + idStr + "已存在缓存")
+                        记录写作业统计跳过("重复不写", 当前统计元信息)
                         continue
                     }
                 } else {
                     if (cache.indexOf(idStr) != -1) {
                         myConsole("idStr: " + idStr + "已存在缓存")
+                        记录写作业统计跳过("重复不写", 当前统计元信息)
                         continue
                     }
                 }
@@ -3757,6 +4370,7 @@ function PP_idTask() {
                 let aimUser = loopResultTextTimer("用户", 5)
                 if (!aimUser) {
                     myConsole("idStr: " + idStr + "无效ID")
+                    记录写作业统计跳过("搜索无结果", 当前统计元信息)
                     clickCenterByObj(loopResultTextTimer("取消", 3))
                     continue
                 }
@@ -3778,6 +4392,7 @@ function PP_idTask() {
                     }
                 } else {
                     myConsole("idStr: " + idStr + "无效ID")
+                    记录写作业统计跳过("搜索无结果", 当前统计元信息)
                     // clickCenterByObj(loopResultTextTimer("取消", 3))
                     continue
                 }
@@ -3834,6 +4449,7 @@ function PP_idTask() {
                     randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
                     clickCenterByObj(loopResultTextTimer("下一步", 3))
                 }
+                记录写作业统计成功(idStr, 当前统计元信息)
                 timer++
                 let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
                 toastLog("等待" + sleepTime + "秒")
@@ -3874,21 +4490,24 @@ function miya_idTask() {
                 // 开始
                 randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
                 let idStr
+                let 当前统计元信息 = 创建写作业统计元信息(res, res.data.data[i])
+                if (!(res.hasOwnProperty("type") && res["type"] == "local_id") && timer >= parseInt(控件信息.操作阈值)) {
+                    toastLog("达到操作阈值，任务停止...")
+                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    return
+                }
+                记录写作业统计处理开始(当前统计元信息)
                 if (res.hasOwnProperty("type") && res["type"] == "local_id") {
-                    idStr = res.data.data[i]
+                    idStr = 当前统计元信息.id
                 } else {
-                    if (timer >= parseInt(控件信息.操作阈值)) {
-                        toastLog("达到操作阈值，任务停止...")
-                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                        return
-                    }
                     let sex = judgeSex()
-                    let jsonData = JSON.parse(res.data.data[i]["content"])
+                    let jsonData = 当前统计元信息.jsonData || {}
                     // console.log("当前数据:" + JSON.stringify(jsonData))
                     if (sex !== "") {
                         console.log("进入性别判断")
                         if (jsonData["gender_text"] !== sex) {
                             myConsole("性别" + jsonData["gender_text"] + "不符合")
+                            记录写作业统计跳过("性别不符", 当前统计元信息)
                             continue
                         }
                     }
@@ -3897,6 +4516,7 @@ function miya_idTask() {
                         console.log("进入主播判断")
                         if (jsonData["is_anchor"] !== isAnchor) {
                             myConsole("模特" + jsonData["is_anchor"] + "不符合")
+                            记录写作业统计跳过("模特过滤", 当前统计元信息)
                             continue
                         }
                     }
@@ -3906,23 +4526,29 @@ function miya_idTask() {
                         let isOk = judgMoneyValue(moneyValue)
                         if (!isOk) {
                             myConsole("消费范围" + moneyValue + "不符合")
+                            记录写作业统计跳过("消费范围不符", 当前统计元信息)
                             continue
                         }
                     }
-                    idStr = getIdReg(res.data.data[i]["content"])
-                    if (!idStr) {
-                        myConsole(res.data.data[i]["content"] + "===>" + idStr)
-                        continue
-                    }
+                    idStr = 当前统计元信息.id
                 }
+                当前统计元信息.id = idStr ? String(idStr).trim() : ""
+                if (!当前统计元信息.id) {
+                    myConsole((res.data.data[i]["content"] || res.data.data[i]) + "===>" + idStr)
+                    记录写作业统计跳过("ID解析失败", 当前统计元信息)
+                    continue
+                }
+                idStr = 当前统计元信息.id
                 if (控件信息.重复不写_box) {
                     if (long_cache.indexOf(idStr) != -1) {
                         myConsole("long_cache idStr: " + idStr + "已存在缓存")
+                        记录写作业统计跳过("重复不写", 当前统计元信息)
                         continue
                     }
                 } else {
                     if (cache.indexOf(idStr) != -1) {
                         myConsole("idStr: " + idStr + "已存在缓存")
+                        记录写作业统计跳过("重复不写", 当前统计元信息)
                         continue
                     }
                 }
@@ -3962,6 +4588,7 @@ function miya_idTask() {
                 // let userIDs = text("ID: 22739121").visibleToUser(true).find()
                 if (!userID) {
                     myConsole("id: " + idStr + "没有搜到")
+                    记录写作业统计跳过("搜索无结果", 当前统计元信息)
                     continue
                 }
 
@@ -3970,6 +4597,7 @@ function miya_idTask() {
                 let goChat = loopResultTextTimer("聊天", 5)
                 if (!goChat) {
                     myConsole("id: " + idStr + "没有按钮")
+                    记录写作业统计跳过("无法进入聊天", 当前统计元信息)
                     continue
                 } else {
                     clickCenterByObj(goChat)
@@ -4287,7 +4915,7 @@ function getIds() {
                 idArray = idArray.concat(控件信息.本地ID库list[i]["data"].trim().split("\n"))
             }
             isCheckedLocal = true
-            return {
+            let localResult = {
                 "code": 0,
                 "data": {
                     "data": idArray,
@@ -4295,6 +4923,8 @@ function getIds() {
                 },
                 "type": "local_id"
             }
+            记录写作业统计取数(localResult)
+            return localResult
         }
     }
 
@@ -4340,6 +4970,7 @@ function getIds() {
                     let parsed = JSON.parse(rawBody)
                     let compatible = 兼容取数返回(parsed)
                     记录自动化日志("fetch.byTable.compat", compatible.fetch_meta || {}, "DEBUG")
+                    记录写作业统计取数(compatible)
                     return compatible
                 } catch (parseError) {
                     记录自动化日志("fetch.byTable.parseError", {
@@ -5290,6 +5921,7 @@ function foundation() {
         myConsole("运行悬浮窗")
         if (悬浮窗启动方式 == 0) {
             if (参数 == '主程序') {
+                开始写作业统计(aimAPP || "-");
                 主程序线程 = threads.start(主程序);
             }
             window.运行.attr("tint", "red");
@@ -5328,12 +5960,14 @@ function foundation() {
             if (window.运行.attr("tint") == "#76EEC6") {
                 日志({ 文本: '物理启动中' });
                 if (参数 == '主程序') {
+                    开始写作业统计(aimAPP || "-");
                     主程序线程 = threads.start(主程序);
                 }
                 window.运行.attr("tint", "red");
                 window.运行.attr("src", "ic_pause_black_48dp");
             } else if (window.运行.attr("tint") == "red") {
                 日志({ 文本: '停止运行' });
+                结束写作业统计("已停止");
                 主程序线程.interrupt();
                 window.运行.attr("tint", "#76EEC6");
                 window.运行.attr("src", "ic_play_arrow_black_48dp");
