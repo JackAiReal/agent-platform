@@ -1065,6 +1065,37 @@ function 获取图片选择摘要() {
     return "未选择图片";
 }
 
+function 更新已选图片修改时间(pathList) {
+    pathList = 规范化图片路径列表(pathList);
+    let result = { total: pathList.length, success: 0, skipped: 0 };
+    let now = new Date().getTime();
+
+    for (let i = 0; i < pathList.length; i++) {
+        let path = String(pathList[i] || "").trim();
+        if (!path || path.indexOf("content://") == 0) {
+            result.skipped++;
+            continue;
+        }
+        try {
+            let file = new java.io.File(path);
+            if (!file.exists()) {
+                result.skipped++;
+                continue;
+            }
+            let targetTime = now - (i * 1000);
+            if (file.setLastModified(targetTime)) {
+                result.success++;
+            } else {
+                result.skipped++;
+            }
+        } catch (e) {
+            result.skipped++;
+            console.log("更新图片修改时间失败: " + e);
+        }
+    }
+    return result;
+}
+
 function 保存图片选择结果(pathList) {
     pathList = 规范化图片路径列表(pathList);
     if (pathList.length > maxImages) {
@@ -1161,9 +1192,14 @@ function 打开系统相册选择图片() {
         let oldPathList = 规范化图片路径列表(控件信息.已选图片路径list || []);
         let mergedPathList = 规范化图片路径列表(oldPathList.concat(pathList));
         let addedCount = mergedPathList.length - oldPathList.length;
+        let updateResult = 更新已选图片修改时间(mergedPathList);
 
         保存图片选择结果(mergedPathList);
-        toastLog("本次新增" + Math.max(addedCount, 0) + "张，当前共" + mergedPathList.length + "张图片");
+        let msg = "本次新增" + Math.max(addedCount, 0) + "张，当前共" + mergedPathList.length + "张图片";
+        if (updateResult.success > 0) {
+            msg += "，已更新" + updateResult.success + "张修改时间";
+        }
+        toastLog(msg);
     });
 }
 
