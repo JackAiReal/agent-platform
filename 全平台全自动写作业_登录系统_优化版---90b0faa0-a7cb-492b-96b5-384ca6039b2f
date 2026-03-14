@@ -4345,6 +4345,9 @@ function foundation() {
     };
 
     存储控件 = function (id, 类型) {
+        if (!ui[id]) {
+            return;
+        }
         if (类型 == "checked") {
             控件信息[(id)] = ui[id].checked;
         } else if (类型 == "text") {
