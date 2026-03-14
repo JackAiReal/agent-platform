@@ -491,15 +491,20 @@ function 获取云端素材本地路径(kind, assetPath) {
     return String(dir).replace(/\/$/, "") + "/" + fileName;
 }
 
+function 准备写入文件(localPath) {
+    let file = new java.io.File(localPath);
+    let parent = file.getParentFile();
+    if (parent && !parent.exists()) {
+        parent.mkdirs();
+    }
+    return file;
+}
+
 function 写入输入流到文件(inputStream, localPath) {
     let out = null;
     try {
-        let file = new java.io.File(localPath);
-        let parent = file.getParentFile();
-        if (parent && !parent.exists()) {
-            parent.mkdirs();
-        }
-        out = new java.io.FileOutputStream(file, false);
+        准备写入文件(localPath);
+        out = new java.io.FileOutputStream(localPath, false);
         let buffer = util.java.array("byte", 8192);
         let len = 0;
         while ((len = inputStream.read(buffer)) != -1) {
@@ -510,6 +515,19 @@ function 写入输入流到文件(inputStream, localPath) {
     } finally {
         try { if (out) out.close(); } catch (e) { }
         try { if (inputStream) inputStream.close(); } catch (e) { }
+    }
+}
+
+function 写入字节到文件(byteArray, localPath) {
+    let out = null;
+    try {
+        准备写入文件(localPath);
+        out = new java.io.FileOutputStream(localPath, false);
+        out.write(byteArray);
+        out.flush();
+        return true;
+    } finally {
+        try { if (out) out.close(); } catch (e) { }
     }
 }
 
@@ -535,8 +553,25 @@ function 下载云端素材到本地(kind, assetPath, accessToken) {
             记录云端同步日志("ERROR", "asset.download.response", { kind: kind, assetPath: assetPath, statusCode: res.statusCode, body: bodyText, url: finalUrl });
             return { ok: false, error: bodyText || ("下载失败: " + res.statusCode), url: finalUrl };
         }
-        let stream = res.body.byteStream();
-        写入输入流到文件(stream, localPath);
+
+        let body = res.body;
+        if (body && typeof body.bytes == "function") {
+            let bodyBytes = body.bytes();
+            写入字节到文件(bodyBytes, localPath);
+        } else if (body && typeof body.byteStream == "function") {
+            let stream = body.byteStream();
+            写入输入流到文件(stream, localPath);
+        } else {
+            let availableKeys = [];
+            try {
+                for (let k in body) {
+                    availableKeys.push(k);
+                }
+            } catch (e) { }
+            let methodInfo = availableKeys.join(",");
+            记录云端同步日志("ERROR", "asset.download.bodyUnsupported", { kind: kind, assetPath: assetPath, url: finalUrl, keys: methodInfo });
+            return { ok: false, error: "响应体不支持 bytes/byteStream" + (methodInfo ? ("，可用字段:" + methodInfo) : ""), url: finalUrl };
+        }
         try { media.scanFile(localPath); } catch (e) { }
         记录云端同步日志("INFO", "asset.download.saved", { kind: kind, assetPath: assetPath, localPath: localPath });
         return { ok: true, path: localPath, url: finalUrl };
