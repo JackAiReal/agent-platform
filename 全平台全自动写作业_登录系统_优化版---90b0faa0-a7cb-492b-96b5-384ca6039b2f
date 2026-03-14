@@ -485,6 +485,19 @@ function 获取云端素材完整地址(assetPath) {
     return 写作业云端资源基址 + assetPath;
 }
 
+function 获取云端素材列表(remoteConfig, kind) {
+    remoteConfig = remoteConfig || {};
+    let absoluteAssets = remoteConfig.assets_absolute_urls || {};
+    let relativeAssets = remoteConfig.assets || {};
+    let absoluteList = Array.isArray(absoluteAssets[kind]) ? absoluteAssets[kind] : [];
+    let relativeList = Array.isArray(relativeAssets[kind]) ? relativeAssets[kind] : [];
+
+    if (absoluteList.length > 0) {
+        return absoluteList;
+    }
+    return relativeList;
+}
+
 function 获取云端素材本地路径(kind, assetPath) {
     let dir = kind == "audio" ? 写作业云端音频目录 : 写作业云端图片目录;
     let fileName = 获取文件名(assetPath) || ((kind == "audio" ? "audio-" : "image-") + new Date().getTime());
@@ -583,9 +596,8 @@ function 下载云端素材到本地(kind, assetPath, accessToken) {
 
 function 同步云端素材到本地(remoteConfig, onProgress) {
     remoteConfig = remoteConfig || {};
-    let assets = remoteConfig.assets || {};
-    let imageAssets = Array.isArray(assets.images) ? assets.images : [];
-    let audioAssets = Array.isArray(assets.audios) ? assets.audios : [];
+    let imageAssets = 获取云端素材列表(remoteConfig, "images");
+    let audioAssets = 获取云端素材列表(remoteConfig, "audios");
     let result = {
         imageRequested: imageAssets.length,
         audioRequested: audioAssets.length,
