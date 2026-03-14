@@ -117,6 +117,8 @@ var isFirstEnter
 var codeStorage
 var RrstartStatus = "初始化"
 var checkThreads = null
+var 任务停止中 = false
+var 任务停止原因 = ""
 let 更新公告 = "V" + 当前版本号 + "更新: 1.添加自动重启修复，无惧自动退出"
 let 滚动公告 = '本软件仅供学习和研究使用。其旨在为技术交流讨论提供参考和资料，任何其他目的均不适用，如若违反相关条例法律, 一切后果由使用者承担, 继续使用代表您同意本条款!。本免责声明的最终解释权归声明者所有。';
 
@@ -3203,6 +3205,7 @@ function 首页ui() {
         if (!悬浮窗线程.isAlive()) {
             myConsole("启动悬浮窗")
             aimAPP = ui.platForms.getSelectedItem()
+            重置任务停止状态()
             开始写作业统计(aimAPP)
             platForms = adjustIndex(platForms, aimAPP)
             console.log("aimAPP")
@@ -3388,59 +3391,150 @@ function 打开充值弹窗() {
     }
 }
 
+function 是否任务停止中() {
+    return 任务停止中 === true;
+}
+
+function 创建任务停止异常(reason) {
+    let err = new Error(reason || "TASK_STOPPED");
+    err.__taskStopped = true;
+    return err;
+}
+
+function 检查任务是否停止() {
+    if (是否任务停止中()) {
+        throw 创建任务停止异常(任务停止原因 || "TASK_STOPPED");
+    }
+}
+
+function 安全等待(ms) {
+    ms = Math.max(0, parseInt(ms) || 0);
+    while (ms > 0) {
+        检查任务是否停止();
+        let step = Math.min(ms, 200);
+        sleep(step);
+        ms -= step;
+    }
+    检查任务是否停止();
+}
+
+function 重置任务停止状态() {
+    任务停止中 = false;
+    任务停止原因 = "";
+    RrstartStatus = "初始化";
+    if (checkThreads && !checkThreads.isAlive()) {
+        checkThreads = null;
+    }
+}
+
+function 关闭任务相关线程() {
+    try {
+        if (主程序线程 && 主程序线程.isAlive()) {
+            主程序线程.interrupt();
+        }
+    } catch (e) { }
+    try {
+        if (checkThreads && checkThreads.isAlive()) {
+            checkThreads.interrupt();
+        }
+    } catch (e) { }
+    checkThreads = null;
+}
+
+function 停止当前任务(reason) {
+    任务停止中 = true;
+    任务停止原因 = reason || "已停止";
+    RrstartStatus = "已停止";
+    关闭任务相关线程();
+}
+
+function 停止任务并返回界面(reason) {
+    停止当前任务(reason || "已停止");
+    try {
+        floaty.closeAll();
+    } catch (e) { }
+    try {
+        if (悬浮窗线程 && 悬浮窗线程.isAlive()) {
+            悬浮窗线程.interrupt();
+        }
+    } catch (e) { }
+    ui.run(function () {
+        var intent = new Intent(context, activity.class);
+        activity.startActivityForResult(intent, 0);
+    });
+}
+
 function myConsole(textStr) {
     if (!日志输出已开启()) return;
     日志({ 文本: textStr, level: "DEBUG" });
 }
 
 function randomSleep(min, max) {
-    sleep(RandomInt(parseInt(min), parseInt(max)))
+    安全等待(RandomInt(parseInt(min), parseInt(max)))
 }
 
 function listenserInOtherPage() {
-    if (checkThreads !== null) {
+    if (checkThreads !== null && checkThreads.isAlive()) {
         console.log("启动过了，无需再次启动listenserInOtherPage")
         return
     }
     checkThreads = threads.start(function () {
-        while (1) {
-            sleep(1000 * 10)
-            console.log("当前状态:" + RrstartStatus)
-            if (RrstartStatus === "正常") {
-                // 开始监听是否回到首页
-                if (packageName(apkPackage).visibleToUser(true).findOnce()) {
-                    console.log("仍然在界面:" + RrstartStatus)
-                    continue
-                } else {
-                    console.log("不在界面:" + RrstartStatus)
-                    sleep(30 * 1000)
+        try {
+            while (!是否任务停止中()) {
+                安全等待(1000 * 10)
+                console.log("当前状态:" + RrstartStatus)
+                if (RrstartStatus === "已停止") {
+                    break
+                }
+                if (RrstartStatus === "正常") {
                     if (packageName(apkPackage).visibleToUser(true).findOnce()) {
-                        console.log("仍然在界面222:" + RrstartStatus)
+                        console.log("仍然在界面:" + RrstartStatus)
                         continue
                     } else {
-                        console.log("不在界面2222:" + RrstartStatus)
-                        RrstartStatus = "异常"
+                        console.log("不在界面:" + RrstartStatus)
+                        安全等待(30 * 1000)
+                        if (是否任务停止中()) {
+                            break
+                        }
+                        if (packageName(apkPackage).visibleToUser(true).findOnce()) {
+                            console.log("仍然在界面222:" + RrstartStatus)
+                            continue
+                        } else {
+                            console.log("不在界面2222:" + RrstartStatus)
+                            RrstartStatus = "异常"
+                        }
                     }
                 }
-            }
 
-            if (RrstartStatus === "初始化") {
-                console.log("还未开始监听...")
-                continue
+                if (RrstartStatus === "初始化") {
+                    console.log("还未开始监听...")
+                    continue
+                }
+                if (RrstartStatus === "正常") {
+                    continue
+                }
+                if (RrstartStatus === "异常") {
+                    if (是否任务停止中()) {
+                        break
+                    }
+                    try {
+                        主程序线程.interrupt();
+                    } catch (e) { }
+                    安全等待(5 * 1000)
+                    if (是否任务停止中()) {
+                        break
+                    }
+                    toastLog("即将自动重启修复...")
+                    主程序线程 = threads.start(主程序);
+                    RrstartStatus = "初始化"
+                }
             }
-            if (RrstartStatus === "正常") {
-                continue
+        } catch (error) {
+            if (!(error && error.__taskStopped)) {
+                console.log(error)
             }
-            if (RrstartStatus === "异常") {
-                主程序线程.interrupt();
-                // window.运行.attr("tint", "#76EEC6");
-                // window.运行.attr("src", "ic_play_arrow_black_48dp");
-                sleep(5 * 1000)
-                toastLog("即将自动重启修复...")
-                主程序线程 = threads.start(主程序);
-                RrstartStatus = "初始化"
-            }
-
+        } finally {
+            checkThreads = null
         }
     })
 }
@@ -3462,12 +3556,13 @@ function checkInstallApp() {
 function 主程序() {
     let 写作业统计结束状态 = "已完成";
     try {
+        重置任务停止状态()
         console.log(控件信息)
         pressOk()
         actionSpeed = RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
         home()
         listenserInOtherPage()
-        sleep(3000)
+        安全等待(3000)
         toastLog("启动APP" + aimAPP)
 
         if (aimAPP === "咪鸭") {
@@ -3522,17 +3617,18 @@ function 主程序() {
                 content: aimAPP + "正在升级，敬请期待...",
                 positive: "确定",
             }).show();
-            sleep(3000)
+            安全等待(3000)
         }
     } catch (error) {
         let errText = String(error || "");
-        if (errText.indexOf("InterruptedException") != -1 || errText.indexOf("script exiting") != -1) {
+        if ((error && error.__taskStopped) || errText.indexOf("InterruptedException") != -1 || errText.indexOf("script exiting") != -1 || errText.indexOf("TASK_STOPPED") != -1) {
             写作业统计结束状态 = "已停止";
+            return
         } else {
             写作业统计结束状态 = "异常结束";
             console.error(error);
+            throw error;
         }
-        throw error;
     } finally {
         结束写作业统计(写作业统计结束状态);
     }
@@ -3770,7 +3866,7 @@ function BuerKaiHei_idTask() {
                 timer++
                 let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
                 toastLog("等待" + sleepTime + "秒")
-                sleep(sleepTime * 1000)
+                安全等待(sleepTime * 1000)
                 backIndexId(fullIdPre + "et_search")
             }
             myConsole("页数比较: " + page + ":" + res.data.total_pages)
@@ -3784,7 +3880,7 @@ function BuerKaiHei_idTask() {
             }
         } else {
             toastLog(res.msg + "60秒后重试")
-            sleep(60 * 1000)
+            安全等待(60 * 1000)
         }
     }
 }
@@ -4011,7 +4107,7 @@ function LaoYueGou_idTask() {
                 timer++
                 let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
                 toastLog("等待" + sleepTime + "秒")
-                sleep(sleepTime * 1000)
+                安全等待(sleepTime * 1000)
                 backIndex("取消")
             }
             myConsole("页数比较: " + page + ":" + res.data.total_pages)
@@ -4025,7 +4121,7 @@ function LaoYueGou_idTask() {
             }
         } else {
             toastLog(res.msg + "60秒后重试")
-            sleep(60 * 1000)
+            安全等待(60 * 1000)
         }
     }
 }
@@ -4037,9 +4133,9 @@ function LanBan_idTask() {
         console.log("已经在ID搜索页")
     } else {
         backIndex("首页")
-        sleep(2000)
+        安全等待(2000)
         clickCenterByObj(loopResultTextTimer("首页", 3))
-        sleep(2000)
+        安全等待(2000)
         let searchBtn = loopResultIdTimer(fullIdPre + "ll_home_top_search", 3)
         console.log("点击搜索")
         if (searchBtn && searchBtn.clickable()) {
@@ -4232,7 +4328,7 @@ function LanBan_idTask() {
                 timer++
                 let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
                 toastLog("等待" + sleepTime + "秒")
-                sleep(sleepTime * 1000)
+                安全等待(sleepTime * 1000)
                 backIndex("取消")
             }
             myConsole("页数比较: " + page + ":" + res.data.total_pages)
@@ -4246,7 +4342,7 @@ function LanBan_idTask() {
             }
         } else {
             toastLog(res.msg + "60秒后重试")
-            sleep(60 * 1000)
+            安全等待(60 * 1000)
         }
     }
 }
@@ -4258,9 +4354,9 @@ function PP_idTask() {
         console.log("已经在ID搜索页")
     } else {
         backIndex("首页")
-        sleep(2000)
+        安全等待(2000)
         clickCenterByObj(loopResultTextTimer("首页", 3))
-        sleep(2000)
+        安全等待(2000)
         let searchBtn = id(fullIdPre + "arg").className("android.widget.TextView").clickable(true).boundsInside(device.width * 0.8, 0, device.width, device.height * 0.1).findOnce()
         console.log("点击搜索")
         if (searchBtn && searchBtn.clickable()) {
@@ -4453,7 +4549,7 @@ function PP_idTask() {
                 timer++
                 let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
                 toastLog("等待" + sleepTime + "秒")
-                sleep(sleepTime * 1000)
+                安全等待(sleepTime * 1000)
                 backIndex("取消")
             }
             myConsole("页数比较: " + page + ":" + res.data.total_pages)
@@ -4467,7 +4563,7 @@ function PP_idTask() {
             }
         } else {
             toastLog(res.msg + "60秒后重试")
-            sleep(60 * 1000)
+            安全等待(60 * 1000)
         }
     }
 }
@@ -4649,13 +4745,13 @@ function miya_idTask() {
                 }
                 let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
                 toastLog("等待" + sleepTime + "秒")
-                sleep(sleepTime * 1000)
+                安全等待(sleepTime * 1000)
                 backIndexId(fullIdPre + "edit")
             }
             myConsole("页数比较: " + page + ":" + res.data.total_pages)
             if (parseInt(page) === parseInt(res.data.total_pages)) {
                 myConsole("达到最大页数" + page)
-                sleep(3000)
+                安全等待(3000)
                 continue
             } else {
                 page++
@@ -4664,7 +4760,7 @@ function miya_idTask() {
             }
         } else {
             toastLog(res.msg + "60秒后重试")
-            sleep(60 * 1000)
+            安全等待(60 * 1000)
         }
     }
 }
@@ -4838,6 +4934,7 @@ function 兼容取数返回(raw) {
 
 function loopResultIdTimer(aimId, timer) {
     while (timer--) {
+        检查任务是否停止()
         console.log('寻找' + aimId + "...")
         let aim = id(aimId).visibleToUser(true).findOnce()
         if (aim) {
@@ -4851,12 +4948,13 @@ function loopResultIdTimer(aimId, timer) {
 
 function backIndexId(indexDesc) {
     while (1) {
+        检查任务是否停止()
         console.log("寻找ID" + indexDesc)
         if (id(indexDesc).visibleToUser(true).findOnce()) {
             break
         } else {
             back()
-            sleep(1500)
+            安全等待(1500)
         }
     }
     // toastLog('已经返回到' + indexDesc)
@@ -4864,34 +4962,36 @@ function backIndexId(indexDesc) {
 
 function slp(sleepTime) {
     if (sleepTime == null) {
-        sleep(1000)
+        安全等待(1000)
     } else {
-        sleep(sleepTime)
+        安全等待(sleepTime)
     }
 }
 
 function loopResultTextTimer(aimText, timer) {
     while (timer--) {
+        检查任务是否停止()
         console.log("寻找Text: " + aimText)
         let aim = text(aimText).visibleToUser(true).findOnce()
         if (aim) {
-            sleep(500)
+            安全等待(500)
             console.log('已经找到' + aimText)
             return aim
         }
-        sleep(1000)
+        安全等待(1000)
     }
     return false
 }
 
 function backIndex(indexDesc) {
     while (1) {
+        检查任务是否停止()
         console.log("寻找" + indexDesc)
         if (text(indexDesc).visibleToUser(true).findOnce()) {
             break
         } else {
             back()
-            sleep(1500)
+            安全等待(1500)
         }
     }
     // toastLog('已经返回到' + indexDesc)
@@ -4899,11 +4999,12 @@ function backIndex(indexDesc) {
 
 function clickCenterByObj(objDec) {
     if (objDec) {
+        检查任务是否停止()
         // 获取x，y坐标
         let x = objDec.bounds().centerX()
         let y = objDec.bounds().centerY()
         click(x, y)
-        sleep(500)
+        安全等待(500)
     }
 }
 
@@ -5921,6 +6022,7 @@ function foundation() {
         myConsole("运行悬浮窗")
         if (悬浮窗启动方式 == 0) {
             if (参数 == '主程序') {
+                重置任务停止状态();
                 开始写作业统计(aimAPP || "-");
                 主程序线程 = threads.start(主程序);
             }
@@ -5960,6 +6062,7 @@ function foundation() {
             if (window.运行.attr("tint") == "#76EEC6") {
                 日志({ 文本: '物理启动中' });
                 if (参数 == '主程序') {
+                    重置任务停止状态();
                     开始写作业统计(aimAPP || "-");
                     主程序线程 = threads.start(主程序);
                 }
@@ -5968,7 +6071,7 @@ function foundation() {
             } else if (window.运行.attr("tint") == "red") {
                 日志({ 文本: '停止运行' });
                 结束写作业统计("已停止");
-                主程序线程.interrupt();
+                停止任务并返回界面("已停止");
                 window.运行.attr("tint", "#76EEC6");
                 window.运行.attr("src", "ic_play_arrow_black_48dp");
             }
@@ -6094,11 +6197,7 @@ function foundation() {
 
     返回ui页 = function () {
         toastLog("回到首页");
-        主程序线程.interrupt();
-        floaty.closeAll()
-        悬浮窗线程.interrupt();
-        var intent = new Intent(context, activity.class);
-        activity.startActivityForResult(intent, 0);
+        停止任务并返回界面("已停止");
     };
 
     获取应用版本名 = function (packageName) {
@@ -6317,7 +6416,7 @@ function base64Decode(data) {
 function heartBeat() {
     myConsole("心跳已开启...")
     while (1) {
-        sleep(60 * 1000)
+        安全等待(60 * 1000)
         let result = threadRunOne2(checkCode, 控件信息.卡密)
         console.log(result)
         try {
@@ -6340,12 +6439,8 @@ function heartBeat() {
 }
 
 function threadRunOne(callback, one) {
-    let res
-    let threada = threads.start(function () {
-        res = callback(one)
-    })
-    threada.join()
-    return res
+    检查任务是否停止()
+    return callback(one)
 }
 
 function threadRunOne2(callback, one) {
@@ -6372,7 +6467,7 @@ function threadRunOne3(callback, one) {
             console.log("报错了")
             console.log(error)
             toastLog("获取超时，正在重试...")
-            sleep(3000)
+            安全等待(3000)
             continue
         }
     }
