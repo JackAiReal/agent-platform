@@ -1510,6 +1510,62 @@ function 清空已选图片() {
 }
 
 var 当前试听音频路径 = "";
+var 已试听完成音频记录 = {};
+var 音频试听监控序号 = 0;
+
+function 当前内置音频正在播放() {
+    try {
+        if (typeof media.isMusicPlaying == "function") {
+            return media.isMusicPlaying() === true;
+        }
+    } catch (e) { }
+    try {
+        if (typeof media.getMusicDuration == "function" && typeof media.getMusicCurrentPosition == "function") {
+            let duration = parseInt(media.getMusicDuration() || 0);
+            let position = parseInt(media.getMusicCurrentPosition() || 0);
+            return duration > 0 && position >= 0 && position < duration;
+        }
+    } catch (e) { }
+    return false;
+}
+
+function 同步音频试听状态() {
+    if (当前试听音频路径 && !当前内置音频正在播放()) {
+        已试听完成音频记录[当前试听音频路径] = true;
+        当前试听音频路径 = "";
+    }
+}
+
+function 启动音频试听监控(path) {
+    音频试听监控序号++;
+    let seq = 音频试听监控序号;
+    threads.start(function () {
+        sleep(500);
+        while (seq == 音频试听监控序号) {
+            if (!当前试听音频路径 || 当前试听音频路径 != path) {
+                break;
+            }
+            if (!当前内置音频正在播放()) {
+                已试听完成音频记录[path] = true;
+                当前试听音频路径 = "";
+                刷新已选音频列表();
+                break;
+            }
+            sleep(500);
+        }
+    });
+}
+
+function 获取音频试听按钮文本(path) {
+    同步音频试听状态();
+    if (当前试听音频路径 == path && 当前内置音频正在播放()) {
+        return "停止";
+    }
+    if (已试听完成音频记录[path]) {
+        return "已试听";
+    }
+    return "试听";
+}
 
 function 获取音频选择摘要() {
     let pathList = 控件信息.已选音频路径list || [];
@@ -1540,7 +1596,9 @@ function 删除已选音频(index) {
     if (当前试听音频路径 == removedPath) {
         try { media.stopMusic(); } catch (e) { }
         当前试听音频路径 = "";
+        音频试听监控序号++;
     }
+    delete 已试听完成音频记录[removedPath];
     保存音频选择结果(pathList);
     toastLog("已删除第" + (index + 1) + "个音频");
 }
@@ -1548,6 +1606,8 @@ function 删除已选音频(index) {
 function 清空已选音频() {
     try { media.stopMusic(); } catch (e) { }
     当前试听音频路径 = "";
+    已试听完成音频记录 = {};
+    音频试听监控序号++;
     保存音频选择结果([]);
     toastLog("已清空已选音频");
 }
@@ -1585,23 +1645,31 @@ function 试听音频(path) {
         return;
     }
     try {
-        if (当前试听音频路径 == path) {
+        同步音频试听状态();
+        if (当前试听音频路径 == path && 当前内置音频正在播放()) {
             try { media.stopMusic(); } catch (e) { }
             当前试听音频路径 = "";
+            音频试听监控序号++;
+            刷新已选音频列表();
             toastLog("已停止试听");
             return;
         }
         try { media.stopMusic(); } catch (e) { }
+        音频试听监控序号++;
         let realPath = path.indexOf("content://") == 0 ? path : files.path(path);
         try {
             media.playMusic(realPath);
             当前试听音频路径 = path;
+            delete 已试听完成音频记录[path];
+            启动音频试听监控(path);
+            刷新已选音频列表();
             toastLog("正在试听: " + 获取文件名(path));
             return;
         } catch (innerError) {
             console.log("内置播放器失败: " + innerError);
         }
         当前试听音频路径 = "";
+        刷新已选音频列表();
         用系统播放器试听音频(path);
     } catch (e) {
         toastLog("试听失败: " + e);
@@ -1627,9 +1695,9 @@ function 刷新已选音频列表() {
             let itemView = ui.inflate(
                 <horizontal w="*" h="36dp" gravity="center_vertical" marginTop="4dp">
                     <text id="音频名称" w="0" layout_weight="1" textSize="12sp" textColor="#333333" maxLines="1" ellipsize="end" />
-                    <card w="52dp" h="28dp" cardCornerRadius="14dp" cardBackgroundColor="#26b3c6" cardElevation="0dp" marginLeft="6dp">
+                    <card w="62dp" h="28dp" cardCornerRadius="14dp" cardBackgroundColor="#26b3c6" cardElevation="0dp" marginLeft="6dp">
                         <vertical id="试听按钮" w="*" h="*" gravity="center">
-                            <text w="*" gravity="center" text="试听" textColor="#FFFFFF" textSize="12sp" textStyle="bold" />
+                            <text id="试听按钮文字" w="*" gravity="center" textColor="#FFFFFF" textSize="12sp" textStyle="bold" />
                         </vertical>
                     </card>
                     <card w="52dp" h="28dp" cardCornerRadius="14dp" cardBackgroundColor="#FFFFFF" cardElevation="0dp" marginLeft="6dp">
@@ -1642,6 +1710,7 @@ function 刷新已选音频列表() {
                 false
             );
             itemView.音频名称.setText((index + 1) + ". " + 获取文件名(path));
+            itemView.试听按钮文字.setText(获取音频试听按钮文本(path));
             itemView.试听按钮.on("click", function () {
                 试听音频(path);
             });
