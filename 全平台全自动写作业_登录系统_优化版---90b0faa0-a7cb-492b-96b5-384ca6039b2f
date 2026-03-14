@@ -1121,10 +1121,14 @@ function 清空已选图片() {
 }
 
 function 打开系统相册选择图片() {
-    let intent = new android.content.Intent(android.content.Intent.ACTION_GET_CONTENT);
+    let intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
     intent.setType("image/*");
     intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
     intent.putExtra(android.content.Intent.EXTRA_ALLOW_MULTIPLE, true);
+    intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    if (android.os.Build.VERSION.SDK_INT >= 19) {
+        intent.addFlags(android.content.Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+    }
 
     图片选择结果管理.startActivityForResult(intent, function (resultCode, data) {
         if (resultCode != activity.RESULT_OK || !data) return;
@@ -1154,8 +1158,12 @@ function 打开系统相册选择图片() {
             return;
         }
 
-        保存图片选择结果(pathList);
-        toastLog("已选择" + pathList.length + "张图片");
+        let oldPathList = 规范化图片路径列表(控件信息.已选图片路径list || []);
+        let mergedPathList = 规范化图片路径列表(oldPathList.concat(pathList));
+        let addedCount = mergedPathList.length - oldPathList.length;
+
+        保存图片选择结果(mergedPathList);
+        toastLog("本次新增" + Math.max(addedCount, 0) + "张，当前共" + mergedPathList.length + "张图片");
     });
 }
 
