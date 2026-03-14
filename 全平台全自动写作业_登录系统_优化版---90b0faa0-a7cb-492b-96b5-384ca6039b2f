@@ -408,6 +408,73 @@ function 生成本地ID库配置(text) {
     }];
 }
 
+var 云端同步进度窗口 = { dialog: null, view: null };
+
+function 记录云端同步日志(level, tag, payload) {
+    level = level || "INFO";
+    let text = 构建日志文本("CloudSync", level, tag, payload);
+    输出控制台日志(level, text);
+}
+
+function 显示云端同步进度() {
+    ui.run(function () {
+        if (云端同步进度窗口.dialog) {
+            return;
+        }
+        let progressView = ui.inflate(
+            <vertical bg="#FFFFFF">
+                <horizontal w="*" h="50dp" gravity="center_vertical" bg="#26b3c6" padding="12dp 0">
+                    <text text="同步云端配置" textColor="#FFFFFF" textSize="18sp" textStyle="bold" marginLeft="16dp" layout_weight="1" />
+                    <text id="关闭同步进度" text="关闭" textColor="#FFFFFF" textSize="16sp" marginRight="16dp" />
+                </horizontal>
+                <text id="同步进度说明" text="准备开始..." textColor="#333333" textSize="14sp" margin="16dp 16dp 16dp 8dp" />
+                <progressbar id="同步进度条" style="?android:attr/progressBarStyleHorizontal" indeterminate="false" max="100" progress="0" w="*" h="24dp" margin="16dp 0 16dp 16dp" />
+                <text id="同步进度百分比" text="0%" textColor="#666666" textSize="13sp" gravity="right" margin="16dp 0 16dp 16dp" />
+            </vertical>,
+            null,
+            false
+        );
+        let dialog = dialogs.build({
+            customView: progressView,
+            wrapInScrollView: false,
+            autoDismiss: false,
+            cancelable: false
+        }).show();
+        progressView.关闭同步进度.on("click", function () {
+            try { dialog.dismiss(); } catch (e) { }
+            云端同步进度窗口.dialog = null;
+            云端同步进度窗口.view = null;
+        });
+        云端同步进度窗口.dialog = dialog;
+        云端同步进度窗口.view = progressView;
+    });
+}
+
+function 更新云端同步进度(progress, text) {
+    ui.run(function () {
+        let view = 云端同步进度窗口.view;
+        if (!view) return;
+        progress = Math.max(0, Math.min(100, parseInt(progress) || 0));
+        if (text) {
+            view.同步进度说明.setText(String(text));
+        }
+        view.同步进度条.setProgress(progress);
+        view.同步进度百分比.setText(progress + "%");
+    });
+}
+
+function 关闭云端同步进度() {
+    ui.run(function () {
+        try {
+            if (云端同步进度窗口.dialog) {
+                云端同步进度窗口.dialog.dismiss();
+            }
+        } catch (e) { }
+        云端同步进度窗口.dialog = null;
+        云端同步进度窗口.view = null;
+    });
+}
+
 function 获取云端素材完整地址(assetPath) {
     assetPath = String(assetPath || "").trim();
     if (!assetPath) return "";
@@ -456,6 +523,7 @@ function 下载云端素材到本地(kind, assetPath, accessToken) {
     try {
         let connector = url.indexOf("?") >= 0 ? "&" : "?";
         let finalUrl = url + connector + "access_token=" + encodeURIComponent(accessToken || "");
+        记录云端同步日志("INFO", "asset.download.request", { kind: kind, assetPath: assetPath, url: finalUrl, localPath: localPath });
         let res = http.get(finalUrl, {
             headers: {
                 "Authorization": "Bearer " + (accessToken || "")
@@ -464,18 +532,21 @@ function 下载云端素材到本地(kind, assetPath, accessToken) {
         if (res.statusCode != 200) {
             let bodyText = "";
             try { bodyText = res.body.string(); } catch (e) { }
+            记录云端同步日志("ERROR", "asset.download.response", { kind: kind, assetPath: assetPath, statusCode: res.statusCode, body: bodyText, url: finalUrl });
             return { ok: false, error: bodyText || ("下载失败: " + res.statusCode), url: finalUrl };
         }
         let stream = res.body.byteStream();
         写入输入流到文件(stream, localPath);
         try { media.scanFile(localPath); } catch (e) { }
+        记录云端同步日志("INFO", "asset.download.saved", { kind: kind, assetPath: assetPath, localPath: localPath });
         return { ok: true, path: localPath, url: finalUrl };
     } catch (e) {
+        记录云端同步日志("ERROR", "asset.download.error", { kind: kind, assetPath: assetPath, url: url, error: String(e) });
         return { ok: false, error: String(e), url: url };
     }
 }
 
-function 同步云端素材到本地(remoteConfig) {
+function 同步云端素材到本地(remoteConfig, onProgress) {
     remoteConfig = remoteConfig || {};
     let assets = remoteConfig.assets || {};
     let imageAssets = Array.isArray(assets.images) ? assets.images : [];
@@ -489,25 +560,39 @@ function 同步云端素材到本地(remoteConfig) {
     };
     let imageLocalPaths = [];
     let audioLocalPaths = [];
+    let totalTasks = Math.min(imageAssets.length, maxImages) + Math.min(audioAssets.length, 3);
+    let finishedTasks = 0;
 
-    imageAssets.slice(0, maxImages).forEach(function (assetPath) {
+    function pushProgress(text) {
+        if (!onProgress) return;
+        let progress = totalTasks > 0 ? (20 + Math.floor((finishedTasks / totalTasks) * 65)) : 88;
+        onProgress(progress, text);
+    }
+
+    imageAssets.slice(0, maxImages).forEach(function (assetPath, index) {
+        pushProgress("正在下载图片 " + (index + 1) + "/" + Math.min(imageAssets.length, maxImages));
         let downloadResult = 下载云端素材到本地("image", assetPath, 控件信息.token);
+        finishedTasks++;
         if (downloadResult.ok) {
             imageLocalPaths.push(downloadResult.path);
             result.imageDownloaded++;
         } else {
             result.errors.push("图片下载失败: " + assetPath + " -> " + downloadResult.error);
         }
+        pushProgress("图片同步中...");
     });
 
-    audioAssets.slice(0, 3).forEach(function (assetPath) {
+    audioAssets.slice(0, 3).forEach(function (assetPath, index) {
+        pushProgress("正在下载音频 " + (index + 1) + "/" + Math.min(audioAssets.length, 3));
         let downloadResult = 下载云端素材到本地("audio", assetPath, 控件信息.token);
+        finishedTasks++;
         if (downloadResult.ok) {
             audioLocalPaths.push(downloadResult.path);
             result.audioDownloaded++;
         } else {
             result.errors.push("音频下载失败: " + assetPath + " -> " + downloadResult.error);
         }
+        pushProgress("音频同步中...");
     });
 
     imageLocalPaths = 规范化图片路径列表(imageLocalPaths);
@@ -524,10 +609,11 @@ function 同步云端素材到本地(remoteConfig) {
     }
     let imageUpdateResult = 更新已选图片修改时间(imageLocalPaths);
     result.imageTouched = imageUpdateResult.success || 0;
+    pushProgress("素材同步完成");
     return result;
 }
 
-function 应用云端写作业配置(payload) {
+function 应用云端写作业配置(payload, progressCallback) {
     payload = payload || {};
     let remoteConfig = payload.config || {};
     let platformSettings = payload.platform_settings || {};
@@ -617,7 +703,7 @@ function 应用云端写作业配置(payload) {
         控件信息.本地ID库list = 生成本地ID库配置((remoteConfig.local_id_library || {}).text || "");
     }
 
-    let assetSyncResult = 同步云端素材到本地(remoteConfig);
+    let assetSyncResult = 同步云端素材到本地(remoteConfig, progressCallback);
     保存控件信息();
     return assetSyncResult;
 }
@@ -628,6 +714,9 @@ function 拉取云端写作业配置() {
         return false;
     }
 
+    显示云端同步进度();
+    更新云端同步进度(5, "正在连接云端...");
+
     let baseUrls = [String(写作业云端配置API || "").replace(/\/$/, "")];
     let paths = ["/member/homework-push-config", "/member/preview/homework-push-config"];
     let lastErrorText = "拉取云端配置失败";
@@ -637,6 +726,7 @@ function 拉取云端写作业配置() {
             let connector = paths[j].indexOf("?") >= 0 ? "&" : "?";
             let url = baseUrls[i] + paths[j] + connector + "access_token=" + encodeURIComponent(控件信息.token);
             try {
+                更新云端同步进度(10, "正在请求配置...");
                 let res = http.get(url, {
                     headers: {
                         "Authorization": "Bearer " + 控件信息.token,
@@ -644,7 +734,7 @@ function 拉取云端写作业配置() {
                     }
                 });
                 let rawBody = res.body.string();
-                记录关键日志("homework.pushConfig.fetch", { url: url, statusCode: res.statusCode, body: rawBody });
+                记录云端同步日志("INFO", "config.fetch.response", { url: url, statusCode: res.statusCode, body: rawBody });
 
                 if (res.statusCode == 404) {
                     lastErrorText = "拉取失败：接口不存在（404）";
@@ -672,7 +762,7 @@ function 拉取云端写作业配置() {
                 } catch (parseError) {
                     let previewText = String(rawBody || "").replace(/\s+/g, " ").slice(0, 80);
                     lastErrorText = "拉取失败：接口返回的不是 JSON 数据" + (previewText ? ("，返回内容：" + previewText) : "");
-                    记录关键日志("homework.pushConfig.parseError", { url: url, error: String(parseError), body: rawBody }, "ERROR");
+                    记录云端同步日志("ERROR", "config.fetch.parseError", { url: url, error: String(parseError), body: rawBody });
                     continue;
                 }
 
@@ -681,7 +771,11 @@ function 拉取云端写作业配置() {
                     continue;
                 }
 
-                let assetSyncResult = 应用云端写作业配置(data.data || {});
+                更新云端同步进度(20, "配置已获取，正在同步素材...");
+                let assetSyncResult = 应用云端写作业配置(data.data || {}, function (progress, text) {
+                    更新云端同步进度(progress, text);
+                });
+                更新云端同步进度(95, "正在刷新界面...");
                 ui.run(function () {
                     首页ui();
                     let msg = "云端配置已拉取并覆盖到本地";
@@ -693,20 +787,27 @@ function 拉取云端写作业配置() {
                             msg += "，已刷新" + assetSyncResult.imageTouched + "张图片排序";
                         }
                         if (assetSyncResult.errors && assetSyncResult.errors.length > 0) {
-                            msg += "，部分素材下载失败";
-                            记录关键日志("homework.pushConfig.assets.partial", assetSyncResult.errors, "WARN");
+                            let firstError = String(assetSyncResult.errors[0] || "");
+                            msg += "，部分素材下载失败：" + firstError.slice(0, 60);
+                            记录云端同步日志("WARN", "config.assets.partial", assetSyncResult.errors);
                         }
                     }
                     toastLog(msg);
                 });
+                更新云端同步进度(100, "同步完成");
+                sleep(300);
+                关闭云端同步进度();
                 return true;
             } catch (e) {
                 lastErrorText = "拉取失败：" + String(e);
-                记录关键日志("homework.pushConfig.error", { url: url, error: lastErrorText }, "ERROR");
+                记录云端同步日志("ERROR", "config.fetch.error", { url: url, error: lastErrorText });
             }
         }
     }
 
+    更新云端同步进度(100, "同步结束");
+    sleep(300);
+    关闭云端同步进度();
     toastLog(lastErrorText);
     return false;
 }
