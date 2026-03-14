@@ -1418,6 +1418,34 @@ function 删除已选图片(index) {
     toastLog("已删除第" + (index + 1) + "张图片");
 }
 
+function 预览图片(path) {
+    let 图片预览地址 = String(path).indexOf("content://") == 0 ? String(path) : ("file://" + String(path));
+    ui.run(function () {
+        let previewView = ui.inflate(
+            <vertical bg="#FFFFFF">
+                <horizontal w="*" h="50dp" gravity="center_vertical" bg="#26b3c6" padding="12dp 0">
+                    <text text="图片预览" textColor="#FFFFFF" textSize="18sp" textStyle="bold" marginLeft="16dp" layout_weight="1" />
+                    <text id="关闭图片预览" text="关闭" textColor="#FFFFFF" textSize="16sp" marginRight="16dp" />
+                </horizontal>
+                <img id="预览大图" w="*" h="320dp" scaleType="fitCenter" />
+                <text id="预览图片名称" textColor="#666666" textSize="12sp" margin="16dp 8dp 16dp 16dp" maxLines="2" ellipsize="end" />
+            </vertical>,
+            null,
+            false
+        );
+        let dialog = dialogs.build({
+            customView: previewView,
+            wrapInScrollView: false,
+            autoDismiss: false
+        }).show();
+        previewView.预览大图.attr("src", 图片预览地址);
+        previewView.预览图片名称.setText(获取文件名(path));
+        previewView.关闭图片预览.on("click", function () {
+            dialog.dismiss();
+        });
+    });
+}
+
 function 刷新已选图片预览() {
     ui.run(function () {
         if (ui.图片位置摘要) {
@@ -1453,6 +1481,9 @@ function 刷新已选图片预览() {
             );
             itemView.预览图.attr("src", 图片预览地址);
             itemView.预览序号.setText(图片序号文本);
+            itemView.预览图.on("click", function () {
+                预览图片(path);
+            });
             itemView.删除图片.on("click", function () {
                 删除已选图片(index);
             });
@@ -1509,6 +1540,32 @@ function 清空已选音频() {
     toastLog("已清空已选音频");
 }
 
+function 用系统播放器试听音频(path) {
+    try {
+        let realPath = String(path || "");
+        if (realPath.indexOf("content://") == 0) {
+            app.startActivity({
+                action: android.content.Intent.ACTION_VIEW,
+                data: android.net.Uri.parse(realPath),
+                type: "audio/*",
+                flags: [android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION]
+            });
+        } else {
+            let file = new java.io.File(files.path(realPath));
+            app.startActivity({
+                action: android.content.Intent.ACTION_VIEW,
+                data: android.net.Uri.fromFile(file),
+                type: "audio/*"
+            });
+        }
+        toastLog("已调用系统播放器: " + 获取文件名(path));
+        return true;
+    } catch (e) {
+        toastLog("系统播放器打开失败: " + e);
+        return false;
+    }
+}
+
 function 试听音频(path) {
     path = String(path || "").trim();
     if (!path) {
@@ -1523,9 +1580,17 @@ function 试听音频(path) {
             return;
         }
         try { media.stopMusic(); } catch (e) { }
-        media.playMusic(path);
-        当前试听音频路径 = path;
-        toastLog("正在试听: " + 获取文件名(path));
+        let realPath = path.indexOf("content://") == 0 ? path : files.path(path);
+        try {
+            media.playMusic(realPath);
+            当前试听音频路径 = path;
+            toastLog("正在试听: " + 获取文件名(path));
+            return;
+        } catch (innerError) {
+            console.log("内置播放器失败: " + innerError);
+        }
+        当前试听音频路径 = "";
+        用系统播放器试听音频(path);
     } catch (e) {
         toastLog("试听失败: " + e);
     }
