@@ -43,6 +43,9 @@ const FETCH_API_CONFIG = {
 };
 
 const 写作业云端配置API = "http://192.168.2.161:5666/api";
+const 写作业云端资源基址 = 写作业云端配置API.replace(/\/api\/?$/, "");
+const 写作业云端图片目录 = "/sdcard/Pictures/写作业云端素材";
+const 写作业云端音频目录 = "/sdcard/Music/写作业云端素材";
 
 /* 获取屏幕信息 */
 const resources = context.getResources();
@@ -405,6 +408,125 @@ function 生成本地ID库配置(text) {
     }];
 }
 
+function 获取云端素材完整地址(assetPath) {
+    assetPath = String(assetPath || "").trim();
+    if (!assetPath) return "";
+    if (/^https?:\/\//i.test(assetPath)) return assetPath;
+    if (assetPath.charAt(0) != "/") {
+        assetPath = "/" + assetPath;
+    }
+    return 写作业云端资源基址 + assetPath;
+}
+
+function 获取云端素材本地路径(kind, assetPath) {
+    let dir = kind == "audio" ? 写作业云端音频目录 : 写作业云端图片目录;
+    let fileName = 获取文件名(assetPath) || ((kind == "audio" ? "audio-" : "image-") + new Date().getTime());
+    return String(dir).replace(/\/$/, "") + "/" + fileName;
+}
+
+function 写入输入流到文件(inputStream, localPath) {
+    let out = null;
+    try {
+        let file = new java.io.File(localPath);
+        let parent = file.getParentFile();
+        if (parent && !parent.exists()) {
+            parent.mkdirs();
+        }
+        out = new java.io.FileOutputStream(file, false);
+        let buffer = util.java.array("byte", 8192);
+        let len = 0;
+        while ((len = inputStream.read(buffer)) != -1) {
+            out.write(buffer, 0, len);
+        }
+        out.flush();
+        return true;
+    } finally {
+        try { if (out) out.close(); } catch (e) { }
+        try { if (inputStream) inputStream.close(); } catch (e) { }
+    }
+}
+
+function 下载云端素材到本地(kind, assetPath, accessToken) {
+    let url = 获取云端素材完整地址(assetPath);
+    if (!url) {
+        return { ok: false, error: "素材地址为空" };
+    }
+
+    let localPath = 获取云端素材本地路径(kind, assetPath);
+    try {
+        let connector = url.indexOf("?") >= 0 ? "&" : "?";
+        let finalUrl = url + connector + "access_token=" + encodeURIComponent(accessToken || "");
+        let res = http.get(finalUrl, {
+            headers: {
+                "Authorization": "Bearer " + (accessToken || "")
+            }
+        });
+        if (res.statusCode != 200) {
+            let bodyText = "";
+            try { bodyText = res.body.string(); } catch (e) { }
+            return { ok: false, error: bodyText || ("下载失败: " + res.statusCode), url: finalUrl };
+        }
+        let stream = res.body.byteStream();
+        写入输入流到文件(stream, localPath);
+        try { media.scanFile(localPath); } catch (e) { }
+        return { ok: true, path: localPath, url: finalUrl };
+    } catch (e) {
+        return { ok: false, error: String(e), url: url };
+    }
+}
+
+function 同步云端素材到本地(remoteConfig) {
+    remoteConfig = remoteConfig || {};
+    let assets = remoteConfig.assets || {};
+    let imageAssets = Array.isArray(assets.images) ? assets.images : [];
+    let audioAssets = Array.isArray(assets.audios) ? assets.audios : [];
+    let result = {
+        imageRequested: imageAssets.length,
+        audioRequested: audioAssets.length,
+        imageDownloaded: 0,
+        audioDownloaded: 0,
+        errors: []
+    };
+    let imageLocalPaths = [];
+    let audioLocalPaths = [];
+
+    imageAssets.slice(0, maxImages).forEach(function (assetPath) {
+        let downloadResult = 下载云端素材到本地("image", assetPath, 控件信息.token);
+        if (downloadResult.ok) {
+            imageLocalPaths.push(downloadResult.path);
+            result.imageDownloaded++;
+        } else {
+            result.errors.push("图片下载失败: " + assetPath + " -> " + downloadResult.error);
+        }
+    });
+
+    audioAssets.slice(0, 3).forEach(function (assetPath) {
+        let downloadResult = 下载云端素材到本地("audio", assetPath, 控件信息.token);
+        if (downloadResult.ok) {
+            audioLocalPaths.push(downloadResult.path);
+            result.audioDownloaded++;
+        } else {
+            result.errors.push("音频下载失败: " + assetPath + " -> " + downloadResult.error);
+        }
+    });
+
+    imageLocalPaths = 规范化图片路径列表(imageLocalPaths);
+    audioLocalPaths = 规范化音频路径列表(audioLocalPaths);
+
+    控件信息.已选图片路径list = imageLocalPaths;
+    if (!String(((remoteConfig.image_position || {}).value) || "").trim()) {
+        控件信息.图片位置 = imageLocalPaths.map(function (item, index) { return String(index + 1); }).join(",");
+    }
+    控件信息.已选音频路径list = audioLocalPaths;
+    if (audioLocalPaths.length <= 0 && 当前试听音频路径) {
+        try { media.stopMusic(); } catch (e) { }
+        当前试听音频路径 = "";
+    }
+    let imageUpdateResult = 更新已选图片修改时间(imageLocalPaths);
+    result.imageTouched = imageUpdateResult.success || 0;
+    return result;
+}
+
 function 应用云端写作业配置(payload) {
     payload = payload || {};
     let remoteConfig = payload.config || {};
@@ -495,7 +617,9 @@ function 应用云端写作业配置(payload) {
         控件信息.本地ID库list = 生成本地ID库配置((remoteConfig.local_id_library || {}).text || "");
     }
 
+    let assetSyncResult = 同步云端素材到本地(remoteConfig);
     保存控件信息();
+    return assetSyncResult;
 }
 
 function 拉取云端写作业配置() {
@@ -557,10 +681,23 @@ function 拉取云端写作业配置() {
                     continue;
                 }
 
-                应用云端写作业配置(data.data || {});
+                let assetSyncResult = 应用云端写作业配置(data.data || {});
                 ui.run(function () {
                     首页ui();
-                    toastLog("云端配置已拉取并覆盖到本地");
+                    let msg = "云端配置已拉取并覆盖到本地";
+                    if (assetSyncResult) {
+                        if (assetSyncResult.imageRequested > 0 || assetSyncResult.audioRequested > 0) {
+                            msg += "，图片" + assetSyncResult.imageDownloaded + "/" + assetSyncResult.imageRequested + "，音频" + assetSyncResult.audioDownloaded + "/" + assetSyncResult.audioRequested;
+                        }
+                        if ((assetSyncResult.imageTouched || 0) > 0) {
+                            msg += "，已刷新" + assetSyncResult.imageTouched + "张图片排序";
+                        }
+                        if (assetSyncResult.errors && assetSyncResult.errors.length > 0) {
+                            msg += "，部分素材下载失败";
+                            记录关键日志("homework.pushConfig.assets.partial", assetSyncResult.errors, "WARN");
+                        }
+                    }
+                    toastLog(msg);
                 });
                 return true;
             } catch (e) {
