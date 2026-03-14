@@ -83,7 +83,11 @@ var 控件信息 = storage.get("控件存储") || {};
 初始化控件信息();
 console.log(控件信息);
 
-var aimStr = "蓝伴语音|咪鸭|哆咪|cucu|喜马拉雅|梦音|花椒|捞月狗|双鱼|伴糖|多多|kook|PP|不夜|不二开黑|keke|gugu|咕咕|atat|双鱼|cucu|uki|小陪伴|Dino|更多App兼容中..."
+var 默认平台列表 = "蓝伴语音|咪鸭|哆咪|cucu|喜马拉雅|梦音|花椒|捞月狗|双鱼|伴糖|多多|kook|PP|不夜|不二开黑|keke|gugu|咕咕|atat|双鱼|cucu|uki|小陪伴|Dino|更多App兼容中..."
+var aimStr = storage.get("云端平台列表") || 默认平台列表
+if (!aimStr || String(aimStr) == "undefined") {
+    aimStr = 默认平台列表
+}
 var aimNum = aimStr.split("|").length
 
 var uiStorage = storages.create("ui");
@@ -342,6 +346,214 @@ function 获取使用教程文本() {
         "6. 若会员信息未及时更新，请重新进入个人信息页面查看最新状态。",
         "7. 如有疑问，请联系售后人员处理。"
     ].join("\n");
+}
+
+function 生成云端平台字符串(platformOptions, currentPlatform) {
+    let list = [];
+
+    function pushPlatform(name) {
+        name = String(name || "").trim();
+        if (!name) return;
+        if (list.indexOf(name) == -1) {
+            list.push(name);
+        }
+    }
+
+    platformOptions = platformOptions || [];
+    for (let i = 0; i < platformOptions.length; i++) {
+        let item = platformOptions[i] || {};
+        pushPlatform(item.value || item.label);
+    }
+
+    pushPlatform(currentPlatform);
+
+    if (list.length <= 0) {
+        return aimStr || 默认平台列表;
+    }
+    return list.join("|");
+}
+
+function 生成文字库配置(items) {
+    items = items || [];
+    let list = [];
+    for (let i = 0; i < items.length; i++) {
+        let text = String(items[i] || "").trim();
+        if (!text) continue;
+        list.push({
+            number: list.length + 1,
+            type: "文字",
+            data: text,
+            done: true
+        });
+    }
+    return list;
+}
+
+function 生成本地ID库配置(text) {
+    text = String(text || "").trim();
+    if (!text) return [];
+    return [{
+        number: 1,
+        type: "文字",
+        data: text,
+        done: true
+    }];
+}
+
+function 应用云端写作业配置(payload) {
+    payload = payload || {};
+    let remoteConfig = payload.config || {};
+    let platformSettings = payload.platform_settings || {};
+    let currentPlatform = remoteConfig.platform || "";
+    let remotePlatForms = 生成云端平台字符串(platformSettings.platform_options || [], currentPlatform);
+
+    if (currentPlatform) {
+        remotePlatForms = adjustIndex(remotePlatForms, currentPlatform);
+    }
+
+    if (remotePlatForms) {
+        aimStr = remotePlatForms;
+        aimNum = aimStr.split("|").length;
+        platForms = aimStr;
+        storage.put("云端平台列表", aimStr);
+        uiStorage.put("platForms", platForms);
+    }
+
+    if (remoteConfig.hasOwnProperty("feature")) {
+        let feature = remoteConfig.feature || {};
+        控件信息.私信用户_box = feature.private_chat === true;
+        控件信息.发送图片_box = feature.post_image === true;
+        控件信息.拨打语音_box = feature.post_voice === true;
+    }
+
+    if (remoteConfig.hasOwnProperty("optimize")) {
+        let optimize = remoteConfig.optimize || {};
+        控件信息.重复不写_box = optimize.dedupe === true;
+    }
+
+    if (remoteConfig.hasOwnProperty("gender")) {
+        let gender = remoteConfig.gender || {};
+        控件信息.写男_box = gender.male === true;
+        控件信息.写女_box = gender.female === true;
+    }
+
+    if (remoteConfig.hasOwnProperty("filter")) {
+        let filter = remoteConfig.filter || {};
+        控件信息.过滤男模_box = filter.male_model === true;
+        控件信息.过滤女模_box = filter.female_model === true;
+    }
+
+    if (remoteConfig.hasOwnProperty("consume")) {
+        let consume = remoteConfig.consume || {};
+        控件信息.消费范围_box = consume.enabled === true;
+        控件信息.消费最低 = String(consume.min != null ? consume.min : "1");
+        控件信息.消费最高 = String(consume.max != null ? consume.max : "999999");
+    }
+
+    if (remoteConfig.hasOwnProperty("stop")) {
+        let stop = remoteConfig.stop || {};
+        控件信息.操作阈值 = String(stop.threshold != null ? stop.threshold : "999");
+    }
+
+    if (remoteConfig.hasOwnProperty("delay")) {
+        let delay = remoteConfig.delay || {};
+        控件信息.操作延迟_box = delay.enabled === true;
+        控件信息.操作延迟小 = String(delay.min_ms != null ? delay.min_ms : "500");
+        控件信息.操作延迟大 = String(delay.max_ms != null ? delay.max_ms : "1500");
+    }
+
+    if (remoteConfig.hasOwnProperty("image_position")) {
+        let imagePosition = remoteConfig.image_position || {};
+        控件信息.图片位置_box = imagePosition.enabled === true;
+        控件信息.图片位置 = String(imagePosition.value != null ? imagePosition.value : "1,2");
+    }
+
+    if (remoteConfig.hasOwnProperty("task_interval")) {
+        let taskInterval = remoteConfig.task_interval || {};
+        控件信息.任务间隔_box = taskInterval.enabled === true;
+        控件信息.任务间隔小 = String(taskInterval.min_sec != null ? taskInterval.min_sec : "2");
+        控件信息.任务间隔大 = String(taskInterval.max_sec != null ? taskInterval.max_sec : "5");
+    }
+
+    if (remoteConfig.hasOwnProperty("simulator_not_same")) {
+        let simulator = remoteConfig.simulator_not_same || {};
+        控件信息.搜索坐标_box = simulator.enabled === true;
+        控件信息.搜索位置X = String(simulator.x900 != null ? simulator.x900 : parseInt(width * 0.96));
+        控件信息.搜索位置Y = String(simulator.y1600 != null ? simulator.y1600 : parseInt(height * 0.96));
+    }
+
+    if (remoteConfig.hasOwnProperty("phrase_library")) {
+        控件信息.话术库list = 生成文字库配置(((remoteConfig.phrase_library || {}).items) || []);
+    }
+
+    if (remoteConfig.hasOwnProperty("local_id_library")) {
+        控件信息.本地ID库list = 生成本地ID库配置((remoteConfig.local_id_library || {}).text || "");
+    }
+
+    保存控件信息();
+}
+
+function 拉取云端写作业配置() {
+    if (!控件信息.token) {
+        toastLog("请先登录账号");
+        return false;
+    }
+
+    let baseUrls = [];
+    [memberApiBase, membershipWebBase].forEach(function (item) {
+        item = String(item || "").replace(/\/$/, "");
+        if (!item) return;
+        if (baseUrls.indexOf(item) == -1) {
+            baseUrls.push(item);
+        }
+    });
+
+    let paths = ["/member/homework-push-config", "/member/preview/homework-push-config"];
+    let lastErrorText = "拉取云端配置失败";
+
+    for (let i = 0; i < baseUrls.length; i++) {
+        for (let j = 0; j < paths.length; j++) {
+            let url = baseUrls[i] + paths[j];
+            try {
+                let res = http.get(url, {
+                    headers: {
+                        "Authorization": "Bearer " + 控件信息.token
+                    }
+                });
+                let rawBody = res.body.string();
+                记录关键日志("homework.pushConfig.fetch", { url: url, statusCode: res.statusCode, body: rawBody });
+
+                if (res.statusCode == 404) {
+                    lastErrorText = rawBody || "接口不存在";
+                    continue;
+                }
+
+                if (res.statusCode != 200) {
+                    lastErrorText = rawBody || ("请求失败: " + res.statusCode);
+                    continue;
+                }
+
+                let data = JSON.parse(rawBody) || {};
+                if (data.code != null && data.code !== 0) {
+                    lastErrorText = data.message || data.msg || "拉取云端配置失败";
+                    continue;
+                }
+
+                应用云端写作业配置(data.data || {});
+                ui.run(function () {
+                    首页ui();
+                    toastLog("云端配置已拉取并覆盖到本地");
+                });
+                return true;
+            } catch (e) {
+                lastErrorText = String(e);
+                记录关键日志("homework.pushConfig.error", { url: url, error: lastErrorText }, "ERROR");
+            }
+        }
+    }
+
+    toastLog(lastErrorText);
+    return false;
 }
 
 function 重置会员信息() {
@@ -1102,9 +1314,14 @@ function 首页ui() {
 
                                     <brdcr-layout foid='false' w='*'   >
                                         <vertical gravity="center_vertical" padding='10'>
-                                            <horizontal w='*' h='25dp' gravity='center_vertical'>
+                                            <horizontal w='*' h='36dp' gravity='center_vertical'>
                                                 <text text="平台: " />
-                                                <spinner id="platForms" entries="{{platForms}}" w="auto" h="auto" textSize="15sp" textColor="#000000" />
+                                                <spinner id="platForms" entries="{{platForms}}" w="0" layout_weight="1" h="auto" textSize="15sp" textColor="#000000" />
+                                                <card w="110dp" h="30dp" cardCornerRadius="15dp" cardBackgroundColor="#26b3c6" cardElevation="0dp" marginLeft="8dp">
+                                                    <vertical id="拉取云端配置按钮" w="*" h="*" gravity="center">
+                                                        <text text="拉取云端配置" textColor="#FFFFFF" textSize="12sp" textStyle="bold" />
+                                                    </vertical>
+                                                </card>
                                             </horizontal>
                                             <horizontal w='*' h='25dp' gravity='center_vertical'>
                                                 <text textSize="15sp">功能选择：</text>
@@ -1341,6 +1558,12 @@ function 首页ui() {
     ui.充值按钮 && ui.充值按钮.on("click", function () {
         threads.start(function () {
             打开充值弹窗();
+        });
+    });
+    ui.拉取云端配置按钮 && ui.拉取云端配置按钮.on("click", function () {
+        threads.start(function () {
+            toastLog("正在拉取云端配置...");
+            拉取云端写作业配置();
         });
     });
     刷新我的页面();
