@@ -1098,13 +1098,15 @@ function 刷新已选图片预览() {
             let itemView = ui.inflate(
                 <vertical w="64dp" h="auto" marginRight="8dp">
                     <card w="60dp" h="60dp" cardCornerRadius="8dp" cardBackgroundColor="#ECEFF1" cardElevation="0dp">
-                        <img w="*" h="*" scaleType="centerCrop" src="{{图片预览地址}}" />
+                        <img id="预览图" w="*" h="*" scaleType="centerCrop" />
                     </card>
-                    <text w="*" gravity="center" text="{{图片序号文本}}" textSize="11sp" textColor="#666666" marginTop="4dp" />
+                    <text id="预览序号" w="*" gravity="center" textSize="11sp" textColor="#666666" marginTop="4dp" />
                 </vertical>,
                 ui.已选图片预览容器,
                 false
             );
+            itemView.预览图.attr("src", 图片预览地址);
+            itemView.预览序号.setText(图片序号文本);
             ui.已选图片预览容器.addView(itemView);
         });
     });
