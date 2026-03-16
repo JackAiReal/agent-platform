@@ -9,7 +9,9 @@
     "start:debug": "nest start --debug --watch",
     "lint": "echo lint placeholder",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "ts-node --project tsconfig.json prisma/seed.ts",
+    "prisma:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.2",
@@ -28,6 +30,9 @@
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
+  },
+  "prisma": {
+    "seed": "ts-node --project tsconfig.json prisma/seed.ts"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.5",
