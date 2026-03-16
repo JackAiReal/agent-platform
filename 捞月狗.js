@@ -1,60 +1,4 @@
 function createAutomationAdapter(shared) {
-    const toastLog = shared.toastLog;
-    const randomSleep = shared.randomSleep;
-    const 安全等待 = shared.安全等待;
-    const clickCenterByObj = shared.clickCenterByObj;
-    const loopResultIdTimer = shared.loopResultIdTimer;
-    const loopResultTextTimer = shared.loopResultTextTimer;
-    const backIndex = shared.backIndex;
-    const threadRunOne = shared.threadRunOne;
-    const getIds = shared.getIds;
-    const 创建写作业统计元信息 = shared.创建写作业统计元信息;
-    const 记录写作业统计处理开始 = shared.记录写作业统计处理开始;
-    const 记录写作业统计跳过 = shared.记录写作业统计跳过;
-    const 记录写作业统计失败 = shared.记录写作业统计失败;
-    const 记录写作业统计成功 = shared.记录写作业统计成功;
-    const judgeSex = shared.judgeSex;
-    const judgIsAnchor = shared.judgIsAnchor;
-    const judgMoneyValue = shared.judgMoneyValue;
-    const myConsole = shared.myConsole;
-    const RandomInt = shared.RandomInt;
-    const pressOk = shared.pressOk;
-    const setTextValue = shared.setText;
-    const clickPoint = shared.click;
-    const idSelector = shared.idSelector;
-
-    function 获取控件信息() {
-        return shared.get控件信息();
-    }
-
-    function 获取前缀() {
-        return shared.getFullIdPre();
-    }
-
-    function 获取页码() {
-        return shared.getPage();
-    }
-
-    function 设置页码(value) {
-        return shared.setPage(value);
-    }
-
-    function 获取缓存(useLongCache) {
-        return useLongCache ? shared.getLongCache() : shared.getCache();
-    }
-
-    function 写入缓存(idStr) {
-        let cache = shared.getCache();
-        cache.push(idStr);
-        shared.putDateStorage("cache", cache);
-    }
-
-    function 获取图片位置数组() {
-        return 获取控件信息().图片位置.split(",").filter((Value) => {
-            return parseInt(Value) > 0 && parseInt(Value) < 10;
-        });
-    }
-
     return {
         config: {
             appName: "捞月狗",
@@ -64,21 +8,44 @@ function createAutomationAdapter(shared) {
             appVersion: "5.5.6",
             fullIdPre: "com.laoyuegou.android:id/"
         },
-        executeTask: function () {
-            let 控件信息 = 获取控件信息();
-            let fullIdPre = 获取前缀();
-            let within = shared.getWithin();
+        executeTask: function (ctx) {
+            const toastLog = ctx.toastLog;
+            const randomSleep = ctx.randomSleep;
+            const 安全等待 = ctx.安全等待;
+            const clickCenterByObj = ctx.clickCenterByObj;
+            const loopResultIdTimer = ctx.loopResultIdTimer;
+            const loopResultTextTimer = ctx.loopResultTextTimer;
+            const backIndex = ctx.backIndex;
+            const threadRunOne = ctx.threadRunOne;
+            const getIds = ctx.getIds;
+            const 创建写作业统计元信息 = ctx.创建写作业统计元信息;
+            const 记录写作业统计处理开始 = ctx.记录写作业统计处理开始;
+            const 记录写作业统计跳过 = ctx.记录写作业统计跳过;
+            const 记录写作业统计失败 = ctx.记录写作业统计失败;
+            const 记录写作业统计成功 = ctx.记录写作业统计成功;
+            const judgeSex = ctx.judgeSex;
+            const judgIsAnchor = ctx.judgIsAnchor;
+            const judgMoneyValue = ctx.judgMoneyValue;
+            const myConsole = ctx.myConsole;
+            const RandomInt = ctx.RandomInt;
+            const pressOk = ctx.pressOk;
+            const setTextValue = ctx.setText;
+            const clickPoint = ctx.click;
+            const idSelector = ctx.idSelector;
+            const classNameEndsWith = ctx.classNameEndsWith;
+            const textContains = ctx.textContains;
+            const device = ctx.device;
 
             toastLog("寻找首页中...")
-            randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+            randomSleep(parseInt(ctx.get当前配置().操作延迟小), parseInt(ctx.get当前配置().操作延迟大))
             if (loopResultTextTimer("搜索用户，房间", 5)) {
                 console.log("已经在ID搜索页")
             } else {
                 if (!loopResultTextTimer("搜索用户，房间", 5)) {
                     backIndex("我")
-                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    RandomInt(parseInt(ctx.get当前配置().操作延迟小), parseInt(ctx.get当前配置().操作延迟大))
                     clickCenterByObj(loopResultTextTimer("首页", 3))
-                    RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                    RandomInt(parseInt(ctx.get当前配置().操作延迟小), parseInt(ctx.get当前配置().操作延迟大))
                     let searchBtns = classNameEndsWith("ViewGroup").clickable(true).boundsInside(device.width * 0.5, 0, device.width, device.height * 0.2).find()
                     if (searchBtns.length > 0) {
                         console.log("点击搜索")
@@ -87,22 +54,22 @@ function createAutomationAdapter(shared) {
                         } else {
                             clickCenterByObj(searchBtns[0])
                         }
-                        RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
+                        RandomInt(parseInt(ctx.get当前配置().操作延迟小), parseInt(ctx.get当前配置().操作延迟大))
                     }
                 }
             }
 
             let timer = 0
             while (1) {
-                控件信息 = 获取控件信息();
-                fullIdPre = 获取前缀();
-                within = shared.getWithin();
+                let 控件信息 = ctx.get当前配置();
+                let fullIdPre = ctx.getFullIdPre();
+                let within = ctx.getWithin();
                 let res = threadRunOne(getIds, within)
                 if (res.hasOwnProperty("code") && res.data.data.length > 0) {
                     toastLog("获取到" + res.data.data.length + "条ID数据 还有很多条")
                     for (let i = 0; i < res.data.data.length; i++) {
-                        控件信息 = 获取控件信息();
-                        fullIdPre = 获取前缀();
+                        控件信息 = ctx.get当前配置();
+                        fullIdPre = ctx.getFullIdPre();
                         randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
                         let idStr
                         let 当前统计元信息 = 创建写作业统计元信息(res, res.data.data[i])
@@ -154,20 +121,20 @@ function createAutomationAdapter(shared) {
                         }
                         idStr = 当前统计元信息.id
                         if (控件信息.重复不写_box) {
-                            if (获取缓存(true).indexOf(idStr) != -1) {
+                            if (ctx.getLongCache().indexOf(idStr) != -1) {
                                 myConsole("long_cache idStr: " + idStr + "已存在缓存")
                                 记录写作业统计跳过("重复不写", 当前统计元信息)
                                 continue
                             }
                         } else {
-                            if (获取缓存(false).indexOf(idStr) != -1) {
+                            if (ctx.getCache().indexOf(idStr) != -1) {
                                 myConsole("idStr: " + idStr + "已存在缓存")
                                 记录写作业统计跳过("重复不写", 当前统计元信息)
                                 continue
                             }
                         }
                         toastLog("开始ID: " + idStr)
-                        写入缓存(idStr)
+                        ctx.写入缓存(idStr, false)
                         randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
                         let inputBar = classNameEndsWith("EditText").clickable(true).findOnce()
                         if (inputBar) {
@@ -225,10 +192,10 @@ function createAutomationAdapter(shared) {
                         }
                         clickCenterByObj(enterBtn)
                         randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                        shared.setRestartStatus("正常")
+                        ctx.setRestartStatus("正常")
                         if (控件信息.私信用户_box) {
                             RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                            let msg = 控件信息.话术库list[RandomInt(0, 控件信息.话术库list.length - 1)]["data"]
+                            let msg = ctx.获取随机话术文本()
                             myConsole(msg)
                             setTextValue(msg)
                             RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
@@ -259,7 +226,7 @@ function createAutomationAdapter(shared) {
                                 backIndex("取消")
                                 continue
                             }
-                            let image_poses = 获取图片位置数组();
+                            let image_poses = ctx.获取图片位置数组();
                             loopResultIdTimer(fullIdPre + "c0p")
                             RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
                             let imageSeles = idSelector(fullIdPre + "c0p").visibleToUser(true).find()
@@ -289,13 +256,13 @@ function createAutomationAdapter(shared) {
                         安全等待(sleepTime * 1000)
                         backIndex("取消")
                     }
-                    myConsole("页数比较: " + 获取页码() + ":" + res.data.total_pages)
-                    if (parseInt(获取页码()) === parseInt(res.data.total_pages)) {
-                        myConsole("达到最大页数" + 获取页码())
+                    myConsole("页数比较: " + ctx.getPage() + ":" + res.data.total_pages)
+                    if (parseInt(ctx.getPage()) === parseInt(res.data.total_pages)) {
+                        myConsole("达到最大页数" + ctx.getPage())
                         break
                     } else {
-                        设置页码(parseInt(获取页码()) + 1)
-                        myConsole("页数+1：" + 获取页码())
+                        ctx.setPage(parseInt(ctx.getPage()) + 1)
+                        myConsole("页数+1：" + ctx.getPage())
                     }
                 } else {
                     toastLog(res.msg + "60秒后重试")

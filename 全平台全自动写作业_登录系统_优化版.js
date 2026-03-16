@@ -3613,6 +3613,77 @@ function 加载自动化模块(appName) {
     return adapter;
 }
 
+function 创建自动化上下文(appName, adapter) {
+    let config = adapter && adapter.config ? adapter.config : {};
+    return {
+        appName: appName,
+        modulePath: adapter && adapter.__modulePath ? adapter.__modulePath : "",
+        config: config,
+        toastLog: toastLog,
+        randomSleep: randomSleep,
+        安全等待: 安全等待,
+        clickCenterByObj: clickCenterByObj,
+        loopResultIdTimer: loopResultIdTimer,
+        loopResultTextTimer: loopResultTextTimer,
+        backIndex: backIndex,
+        backIndexId: backIndexId,
+        threadRunOne: threadRunOne,
+        getIds: getIds,
+        创建写作业统计元信息: 创建写作业统计元信息,
+        记录写作业统计处理开始: 记录写作业统计处理开始,
+        记录写作业统计跳过: 记录写作业统计跳过,
+        记录写作业统计失败: 记录写作业统计失败,
+        记录写作业统计成功: 记录写作业统计成功,
+        judgeSex: judgeSex,
+        judgIsAnchor: judgIsAnchor,
+        judgMoneyValue: judgMoneyValue,
+        myConsole: myConsole,
+        RandomInt: RandomInt,
+        pressOk: pressOk,
+        setText: setText,
+        click: click,
+        idSelector: id,
+        classNameEndsWith: classNameEndsWith,
+        textContains: textContains,
+        packageName: packageName,
+        device: device,
+        console: console,
+        get控件信息: function () { return 控件信息; },
+        get当前配置: function () { return 控件信息; },
+        getWithin: function () { return within; },
+        getFullIdPre: function () { return fullIdPre; },
+        getLongCache: function () { return long_cache; },
+        getCache: function () { return cache; },
+        putDateStorage: function (key, value) { return dateStorage.put(key, value); },
+        getPage: function () { return page; },
+        setPage: function (value) { page = value; dateStorage.put("page", page); return page; },
+        getRestartStatus: function () { return RrstartStatus; },
+        setRestartStatus: function (value) { RrstartStatus = value; return RrstartStatus; },
+        logAutomation: function (tag, payload, level) { return 记录自动化日志(tag, payload, level); },
+        获取图片位置数组: function () {
+            return String((控件信息 || {}).图片位置 || "").split(",").filter(function (item) {
+                let pos = parseInt(item);
+                return pos > 0 && pos < 10;
+            });
+        },
+        获取随机话术文本: function () {
+            let list = ((控件信息 || {}).话术库list || []).filter(function (item) {
+                return item && item.done == true;
+            });
+            if (list.length <= 0) return "";
+            return list[RandomInt(0, list.length - 1)]["data"] || "";
+        },
+        写入缓存: function (idStr, useLongCache) {
+            if (useLongCache) {
+                long_cache.push(idStr);
+                dateStorage.put("long_cache", long_cache);
+            }
+            cache.push(idStr);
+            dateStorage.put("cache", cache);
+        }
+    };
+}
+
 function 执行模块化自动化(appName) {
     let adapter = 加载自动化模块(appName);
     if (!adapter) return false;
@@ -3623,6 +3694,7 @@ function 执行模块化自动化(appName) {
     appVersion = config.appVersion || appVersion;
     fullIdPre = config.fullIdPre || fullIdPre;
     let launchAppName = config.launchAppName || config.appName || appName;
+    let ctx = 创建自动化上下文(appName, adapter);
 
     记录自动化日志("automation.module.loaded", {
         appName: appName,
@@ -3632,7 +3704,7 @@ function 执行模块化自动化(appName) {
 
     app.launchApp(launchAppName);
     if (checkInstallApp()) {
-        adapter.executeTask();
+        adapter.executeTask(ctx);
     }
     return true;
 }
