@@ -52,7 +52,6 @@ const resources = context.getResources();
 let 屏幕信息 = resources.getDisplayMetrics();
 const 设备高度 = Math.floor((device.height || 屏幕信息.heightPixels || 1920) / 10) * 10;
 const 设备宽度 = Math.floor((device.width || 屏幕信息.widthPixels || 1080) / 10) * 10;
-const toast监控 = { 是否开启: false, toast内容: null };
 var height = device.height
 var width = device.width
 
@@ -113,8 +112,6 @@ function storageNullCreateui(appStorage, key, defaultValue) {
 
 var 主程序线程 = threads.start(function () { });
 var 悬浮窗线程 = threads.start(function () { });
-var isFirstEnter
-var codeStorage
 var RrstartStatus = "初始化"
 var checkThreads = null
 var 任务停止中 = false
@@ -2627,7 +2624,6 @@ function 首页ui() {
                                             </horizontal>
                                             <horizontal w='*' h='25dp' gravity='center_vertical'>
                                                 <text textSize="15sp">功能选择：</text>
-                                                <checkbox visibility="gone" id="添加用户_box" checked="{{控件信息.添加用户_box}}" text='添加' w="auto" h="auto" textSize="15sp" textColor="#000000" />
                                                 <checkbox id="私信用户_box" checked="{{控件信息.私信用户_box}}" text='私信' w="auto" h="auto" textSize="15sp" textColor="#000000" />
                                                 <checkbox id="拨打语音_box" checked="{{控件信息.拨打语音_box}}" text='发语音条' w="auto" h="auto" textSize="15sp" textColor="#000000" />
                                                 <checkbox id="发送图片_box" checked="{{控件信息.发送图片_box}}" text='发图' w="auto" h="auto" textSize="15sp" textColor="#000000" />
@@ -2668,15 +2664,6 @@ function 首页ui() {
                                             </horizontal  >
 
                                             <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal visibility="gone" w='*' h='auto' gravity='center_vertical' >
-                                                <text text='拨打停留：' w="auto" h="auto" textSize="15sp" ></text>
-                                                <input-layout id="拨打停留小" style="number" text="{{控件信息.拨打停留小||'5'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
-                                                <text textSize="15sp">秒 至</text>
-                                                <input-layout id="拨打停留大" style="number" text="{{控件信息.拨打停留大||'10'}}" hint="秒(整数型)" h='*' layout_weight="1"></input-layout>
-                                                <text textSize="15sp">秒</text>
-                                            </horizontal  >
-
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
 
                                             <horizontal w='*' h='25dp' gravity='center_vertical'>
                                                 <checkbox id="操作延迟_box" checked="{{控件信息.操作延迟_box}}" text="操作延迟：" w="auto" h="auto" textSize="15sp" textColor="#000000" />
@@ -2685,19 +2672,6 @@ function 首页ui() {
                                                 <input-layout id="操作延迟大" style="number" text="{{控件信息.操作延迟大||'1500'}}" hint="毫秒(整数型)" h='*' layout_weight="1"></input-layout>
                                                 <text textSize="15sp">毫秒</text>
                                             </horizontal>
-
-                                            <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
-                                            <horizontal visibility="gone" w='*' h='auto' gravity='center_vertical' >
-                                                <text text='号码数据：' w="auto" h="auto" textSize="15sp" ></text>
-                                                <input-layout layout_weight="1" h='25dp' id="号码数据path" text="{{控件信息.号码数据path||'/sdcard/Pictures/号码数据.txt'}}"></input-layout>
-                                                <card w="auto" h="*" cardCornerRadius="2dp"
-                                                    cardBackgroundColor='#03A9F4' cardElevation="0dp" id='选择号码数据path' marginLeft='5dp'>
-                                                    <horizontal w="*" h="*" padding="5dp 0dp">
-                                                        <text w="auto" h="auto" textSize="15sp" textColor="#ffffff" text="选择"
-                                                            layout_gravity='center_vertical' />
-                                                    </horizontal>
-                                                </card>
-                                            </horizontal  >
 
                                             <frame h='1px' w='*' bg="#D4D4D4" margin="10 5" />
                                             <horizontal w='*' h='36dp' gravity='center_vertical'>
@@ -2941,11 +2915,6 @@ function 首页ui() {
                                             <img w="28dp" h="28dp" src="ic_extension_black_48dp" scaleType="fitEnd" />
                                             <Switch id="悬浮窗" w="*" h="*" textSize="16sp" textColor="#333333" text="悬浮窗权限（必选）" checked="{{floaty.checkPermission() != false}}" marginLeft="11dp" />
                                         </horizontal>
-                                        {/* <frame w="*" h="1dp" bg='#EEEEEE' margin='0dp 15dp' />
-                                        <horizontal gravity="center_vertical" >
-                                            <img w="28dp" h="28dp" src="ic_aspect_ratio_black_48dp" scaleType="fitEnd" />
-                                            <Switch id="截图" w="*" h="*" textSize="16sp" textColor="#333333" text="截图权限（必选）" checked="{{images.getScreenCaptureOptions() != null}}" marginLeft="11dp" />
-                                        </horizontal> */}
                                     </vertical>
                                 </card>
                                 <card id='日志卡片' w="*" h="auto" cardCornerRadius="10dp"
@@ -3058,26 +3027,22 @@ function 首页ui() {
     刷新已选图片预览();
     刷新已选音频列表();
 
-    ui.vp.addOnPageChangeListener({ onPageSelected: function (position) {/*将当前的页面对应的底部标签设为选中状态*/页面切换(position) } });
+    ui.vp.addOnPageChangeListener({ onPageSelected: function (position) { 页面切换(position) } });
     ui.我的.click(() => { 页面切换(1) });
     ui.首页.click(() => { 页面切换(0) });
-
-    ui.选择号码数据path.click(() => { FileUI('text/*', ui.号码数据path.widget); });
 
     function 页面切换(页面) {
         if (页面 == 0) {
             ui.run(function () {
-                  /*进入指定的页面*/ ui.vp.setCurrentItem(0);
+                ui.vp.setCurrentItem(0);
                 ui.我的text.setTextColor(colors.parseColor("#999999"))
                 ui.首页text.setTextColor(colors.parseColor("#000000"))
                 ui.我的img.attr("tint", "#999999");
                 ui.首页img.attr("tint", "#000000");
-
             });
-
         } else if (页面 == 1) {
             ui.run(function () {
-             /*进入指定的页面*/ ui.vp.setCurrentItem(1);
+                ui.vp.setCurrentItem(1);
                 ui.我的text.setTextColor(colors.parseColor("#000000"))
                 ui.首页text.setTextColor(colors.parseColor("#999999"))
                 ui.我的img.attr("tint", "#000000");
@@ -3092,40 +3057,20 @@ function 首页ui() {
         刷新日志入口状态();
     });
 
-    /*当离开本界面时保存todoList*/
     ui.emitter.on("pause", () => {
         ui控件存储();
     });
 
     ui.userEmailUI && ui.userEmailUI.on("click", function () {
-    let text = (控件信息.userInfo && 控件信息.userInfo.email) || "";
-    if (text) {
-        setClip(text);
-        toastLog("已复制邮箱: " + text);
-    }
-});
-
-    // ui.emitter.on("back_pressed", e => {
-    //     if (!kg) {
-    //         kg = true;
-    //         toastLog("再按一次退出");
-    //         setTimeout(() => {
-    //             kg = false;
-    //         }, 350);
-    //         e.consumed = true;
-    //     } else {
-    //         engines.stopAll();
-    //     };
-    // });
+        let text = (控件信息.userInfo && 控件信息.userInfo.email) || "";
+        if (text) {
+            setClip(text);
+            toastLog("已复制邮箱: " + text);
+        }
+    });
 
     ui.emitter.on("resume", function () {
         同步首页状态();
-    });
-
-    ui.清除记录 && ui.清除记录.on("click", function () {
-        控件信息.操作记录list = [];
-        刷新操作记录统计();
-        toastLog("清除成功");
     });
 
     ui.无障碍.on("click", function (checked) {
@@ -3139,27 +3084,6 @@ function 首页ui() {
             action: "android.settings.action.MANAGE_OVERLAY_PERMISSION"
         });
     });
-    // ui.platForms.setOnItemSelectedListener({
-    //     onItemSelected: function(parent, view, position, id) {
-    //         var selectedItem = parent.getItemAtPosition(position); // 获取选中的值
-    //         console.log("选中的值:", selectedItem);
-    //         toast("感谢使用，您已经激活" + selectedItem + "写作业！");
-    //         if(isFirstEnter) {
-    //             console.log("第一次进来不操作")
-    //             isFirstEnter = false
-    //         } else {
-    //             console.log("后面的操作就锁住")
-    //             codeStorage.put("isFirstEnter", false)
-    //             isFirstEnter = false
-    //             ui.platForms.setEnabled(isFirstEnter);
-    //         }
-    //     },
-    //     onNothingSelected: function(parent) {
-    //         console.log("未选择任何选项");
-    //     }
-    // });
-    // ui.platForms.setEnabled(isFirstEnter);
-
     ui.退出登录 && ui.退出登录.on("click", function () { 退出登录(); });
     ui.退出.click(() => { engines.stopAll(); });
 
@@ -3207,14 +3131,6 @@ function 首页ui() {
 
         控件信息.已获取number = 0;
 
-        // home();
-        if (!toast监控.是否开启) {
-            events.observeToast();
-            events.onToast(function (toast) {
-                toast监控.是否开启 = true;
-                toast监控.toast内容 = toast.getText();
-            });
-        }
         if (!悬浮窗线程.isAlive()) {
             myConsole("启动悬浮窗")
             aimAPP = ui.platForms.getSelectedItem()
@@ -4306,37 +4222,6 @@ function LanBan_idTask() {
                         randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
                     })
                 }
-                // if (控件信息.发送图片_box) {
-                //     loopResultIdTimer(fullIdPre + "more_btn", 3)
-                //     // let imageBtn = className("android.widget.FrameLayout").boundsInside(device.width * 0.8, device.height * 0.9, device.width, device.height).findOnce()
-                //     // clickCenterByObj(imageBtn)
-                //     let imageBtn2 = loopResultTextTimer("图片", 3)
-                //     clickCenterByObj(imageBtn2)
-                //     let image_poses = 控件信息.图片位置.split(",").filter((Value) => {
-                //         return parseInt(Value) > 0 && parseInt(Value) < 10;
-                //     });
-                //     loopResultTextTimer("选择图片")
-                //     randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                //     let imageSeles = className("android.widget.FrameLayout").depth(6).clickable(true).visibleToUser(true).find()
-                //     randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                //     toastLog("当前图片选择位置" + image_poses)
-                //     console.log(image_poses)
-                //     if (imageSeles.length >= image_poses.length) {
-                //         image_poses.forEach(pos => {
-                //             randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                //             // console.log(imageSeles[aimPos])
-                //             let aimPos = parseInt(pos) - 1
-                //             if (imageSeles[aimPos].clickable()) {
-                //                 imageSeles[aimPos].click()
-                //             } else {
-                //                 clickCenterByObj(imageSeles[aimPos])
-                //             }
-                //             randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                //         })
-                //     }
-                //     randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                //     clickCenterByObj(loopResultTextTimer("下一步", 3))
-                // }
                 记录写作业统计成功(idStr, 当前统计元信息)
                 timer++
                 let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
@@ -6382,164 +6267,9 @@ function foundation() {
     };
 }
 
-// 控件信息.卡密
-function checkCode(code) {
-    let url = baseUrl + "/v1/active_code/use_code_encry"
-    // let url = "http://192.168.2.109:5001/v1/active_code/use_code_encry"
-    let data = {
-        "code_type": codeType,
-        "bind_id": androidId,
-        "code": code
-    }
-    // myConsole(data)
-    let res = http.postJson(url, data)
-    if (res.statusCode == 200) {
-        return JSON.parse(decrypt(res.body.string()))
-    }
-}
-
-function decrypt(encryptedData) {
-    // Step 1: 找到加密时倒置的部分，恢复倒置的部分
-    const startIndex = Math.floor(encryptedData.length * 0.02);
-    const endIndex = Math.floor(encryptedData.length * 0.98);
-    const reversedPart = encryptedData.slice(startIndex, endIndex).split('').reverse().join('');
-
-    // Step 2: 恢复倒置的部分
-    let decryptedData = encryptedData.slice(0, startIndex) + reversedPart + encryptedData.slice(endIndex);
-
-    // Step 3: 去除补充的字符
-    const midIndex = Math.floor(decryptedData.length / 2);
-    if (decryptedData.length % 2 !== 0) {
-        decryptedData = decryptedData.slice(0, midIndex) + decryptedData.slice(midIndex + 1);
-    }
-
-    // Step 4: Base64 解码
-    return base64Decode(decryptedData);
-    // return decryptedData
-}
-
-function base64Decode(data) {
-    // 使用 Java Base64 解码
-    var decodedBytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT);
-
-    // 将解码后的字节数组转换为字符串
-    return new java.lang.String(decodedBytes, "UTF-8");
-}
-
-function heartBeat() {
-    myConsole("心跳已开启...")
-    while (1) {
-        安全等待(60 * 1000)
-        let result = threadRunOne2(checkCode, 控件信息.卡密)
-        console.log(result)
-        try {
-            if (result.code == 0) {
-                if (result.data.status != 1) {
-                    toastLog(result.data.msg)
-                    sleep(10 * 1000)
-                    exit();
-                } else {
-                    console.log(result.data)
-                    return
-                }
-            }
-        } catch (error) {
-            toastLog("网络异常2")
-            sleep(3 * 1000)
-            exit();
-        }
-    }
-}
-
 function threadRunOne(callback, one) {
     检查任务是否停止()
     return callback(one)
 }
 
-function threadRunOne2(callback, one) {
-    let res
-    let threada = threads.start(function () {
-        res = callback(one)
-    })
-    threada.join()
-    return res
-}
-
-function threadRunOne3(callback, one) {
-    let res = ""
-    while (1) {
-        try {
-            let threada = threads.start(function () {
-                res = callback(one)
-            }).join()
-            if (res) {
-                console.log("获取到数据" + res)
-                return res
-            }
-        } catch (error) {
-            console.log("报错了")
-            console.log(error)
-            toastLog("获取超时，正在重试...")
-            安全等待(3000)
-            continue
-        }
-    }
-    return res
-}
-
-function 登录验证() {
-    // toastLog("登录验证中...");
-    // if (!CheckFd() && !isWifiProxy(context)) {
-    // let fhz = Ssdun.卡密验证();
-    // sleep(2500)
-    let result = threadRunOne3(checkCode, 控件信息.卡密)
-    // let result = checkCode(控件信息.卡密)
-    try {
-        console.log(result)
-        console.log(result.hasOwnProperty("error_code"))
-        if (result.hasOwnProperty("data") && result.data.status == 1) {
-            控件信息.卡密_到期time = result.data.expire_time
-            codeStorage = storages.create(控件信息.卡密);
-            // codeStorage.clear()
-            isFirstEnter = storageNullCreate(codeStorage, "isFirstEnter", true)
-            // selectedItem = storageNullCreate(codeStorage, "selectedItem", "")
-            首页ui();
-            threads.start(function () {
-                heartBeat();
-            });
-        } else {
-            var builder = new android.app.AlertDialog.Builder(activity)
-            builder.setTitle("提示：");
-            if (result.hasOwnProperty("data")) {
-                builder.setMessage(result.data.msg);
-            } else {
-                builder.setMessage(result.msg);
-            }
-
-            builder.setIcon(drawable_Id("ic_view_list_black_48dp"));
-            builder.setCancelable(false);
-            //设置正面按钮
-            builder.setPositiveButton("确认", new android.content.DialogInterface.OnClickListener({
-                onClick: function (dialog, which) {
-                    dialog.dismiss();
-                }
-            }))
-            //创建AlertDialog对象
-            dialog = builder.create();
-            dialog.show();
-            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setTextColor(android.graphics.Color.RED);
-            dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setTextColor(android.graphics.Color.BLUE);
-        }
-    } catch (error) {
-        myConsole(error)
-        engines.stopAll();
-        // exit();
-        toastLog("网络异常1")
-    }
-    // } else {
-    //     engines.stopAll();
-    //     exit();
-    // }
-    return false;
-}
 
