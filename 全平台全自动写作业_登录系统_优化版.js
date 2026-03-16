@@ -3591,51 +3591,18 @@ function 主程序() {
         安全等待(3000)
         toastLog("启动APP" + aimAPP)
 
-        if (执行模块化自动化(aimAPP)) {
-        } else if (aimAPP == "PP") {
-            idType = "page_data_26"
-            apkPackage = "com.lizhi.pplive"
-            appVersion = "7.15.0"
-            fullIdPre = "com.lizhi.pplive:id/"
-            app.launchApp("PP")
-            if (checkInstallApp()) {
-                PP_idTask()
-            }
-        } else if (aimAPP == "蓝伴语音") {
-            idType = "page_data_33"
-            apkPackage = "com.nanshan.blue.companion"
-            appVersion = "2.6.5"
-            fullIdPre = "com.nanshan.blue.companion:id/"
-            app.launchApp("蓝伴语音")
-            if (checkInstallApp()) {
-                LanBan_idTask()
-            }
-        } else if (aimAPP == "捞月狗") {
-            idType = "page_data_5"
-            apkPackage = "com.laoyuegou.android"
-            appVersion = "5.5.6"
-            fullIdPre = "com.laoyuegou.android:id/"
-            app.launchApp("捞月狗")
-            if (checkInstallApp()) {
-                LaoYueGou_idTask()
-            }
-        } else if (aimAPP == "不二开黑") {
-            idType = "page_data_15"
-            apkPackage = "com.buerkaihei.meet"
-            appVersion = "5.5.6"
-            fullIdPre = "com.buerkaihei.meet:id/"
-            app.launchApp("不二开黑")
-            if (checkInstallApp()) {
-                BuerKaiHei_idTask()
-            }
-        } else {
-            toastLog(aimAPP + "正在升级，敬请期待...")
+        if (!执行模块化自动化(aimAPP)) {
+            let modulePath = 获取自动化模块路径(aimAPP)
+            let tipText = aimAPP + " 暂时不支持该app，请在当前目录放入对应模块文件：" + aimAPP + ".js"
+            写作业统计结束状态 = "暂不支持"
+            toastLog(tipText)
             dialogs.build({
                 title: "友情提示",
-                content: aimAPP + "正在升级，敬请期待...",
+                content: tipText + "\n\n模块路径：" + modulePath,
                 positive: "确定",
             }).show();
             安全等待(3000)
+            return
         }
     } catch (error) {
         let errText = String(error || "");
