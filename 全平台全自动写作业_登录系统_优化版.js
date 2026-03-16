@@ -3484,7 +3484,7 @@ function 获取自动化模块根目录() {
 }
 
 function 获取自动化模块路径(appName) {
-    return 获取自动化模块根目录() + "/automation/apps/" + appName + ".js";
+    return 获取自动化模块根目录() + "/" + appName + ".js";
 }
 
 function 创建自动化共享对象() {
