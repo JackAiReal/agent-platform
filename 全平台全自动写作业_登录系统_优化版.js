@@ -1057,7 +1057,16 @@ function 同步云端素材到本地(remoteConfig, onProgress) {
     audioLocalPaths = 规范化音频路径列表(audioLocalPaths);
 
     控件信息.已选图片路径list = imageLocalPaths;
-    if (!String(((remoteConfig.image_position || {}).value) || "").trim()) {
+    let 云端图片位置文本 = String(((remoteConfig.image_position || {}).value) || "").trim();
+    let 云端图片位置数组 = 云端图片位置文本 ? 云端图片位置文本.split(",").map(function (item) {
+        return String(item || "").trim();
+    }).filter(function (item) {
+        let pos = parseInt(item);
+        return pos > 0 && pos <= imageLocalPaths.length;
+    }) : [];
+    if (云端图片位置数组.length > 0) {
+        控件信息.图片位置 = 云端图片位置数组.join(",");
+    } else {
         控件信息.图片位置 = imageLocalPaths.map(function (item, index) { return String(index + 1); }).join(",");
     }
     控件信息.已选音频路径list = audioLocalPaths;
