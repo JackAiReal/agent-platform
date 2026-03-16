@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { RoleCode } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 type DemoUser = {
@@ -51,12 +52,19 @@ type DemoRankEntry = {
   updatedAt: string;
 };
 
+type DemoRoomRole = {
+  userId: string;
+  roomId: string;
+  roleCode: RoleCode;
+};
+
 @Injectable()
 export class DemoStoreService {
   private readonly users: DemoUser[] = [];
   private readonly rooms: DemoRoom[] = [];
   private readonly slots: DemoSlot[] = [];
   private readonly rankEntries: DemoRankEntry[] = [];
+  private readonly roomRoles: DemoRoomRole[] = [];
 
   constructor() {
     this.seed();
@@ -96,6 +104,14 @@ export class DemoStoreService {
 
     const slotA = this.ensureCurrentSlot(roomA.id);
     const slotB = this.ensureCurrentSlot(roomB.id);
+
+    this.roomRoles.push(
+      { userId: host.id, roomId: roomA.id, roleCode: RoleCode.HOST },
+      { userId: host.id, roomId: roomA.id, roleCode: RoleCode.ROOM_ADMIN },
+      { userId: host.id, roomId: roomB.id, roleCode: RoleCode.HOST },
+      { userId: guest.id, roomId: roomA.id, roleCode: RoleCode.USER },
+      { userId: guest.id, roomId: roomB.id, roleCode: RoleCode.USER },
+    );
 
     this.rankEntries.push(
       {
@@ -143,6 +159,15 @@ export class DemoStoreService {
     };
 
     this.users.push(user);
+
+    for (const room of this.rooms) {
+      this.roomRoles.push({
+        userId: user.id,
+        roomId: room.id,
+        roleCode: RoleCode.USER,
+      });
+    }
+
     return user;
   }
 
@@ -410,6 +435,12 @@ export class DemoStoreService {
       reset: true,
       affectedCount,
     };
+  }
+
+  userHasAnyRoomRole(userId: string, roomId: string, allowedRoles: RoleCode[]) {
+    return this.roomRoles.some(
+      (item) => item.userId === userId && item.roomId === roomId && allowedRoles.includes(item.roleCode),
+    );
   }
 
   private findUserRank(slotId: string, userId: string) {
