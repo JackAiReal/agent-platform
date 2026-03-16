@@ -3382,6 +3382,28 @@ function 停止当前任务(reason) {
     关闭任务相关线程();
 }
 
+function 等待任务线程结束(waitMs) {
+    waitMs = Math.max(0, parseInt(waitMs) || 0);
+    let startMs = new Date().getTime();
+    while (主程序线程 && 主程序线程.isAlive() && (new Date().getTime() - startMs) < waitMs) {
+        sleep(50);
+    }
+}
+
+function 启动自动化任务线程() {
+    关闭任务相关线程();
+    等待任务线程结束(800);
+    重置任务停止状态();
+    开始写作业统计(aimAPP || "-");
+    主程序线程 = threads.start(主程序);
+}
+
+function 停止任务并保留悬浮窗(reason) {
+    reason = reason || "已停止";
+    结束写作业统计(reason);
+    停止当前任务(reason);
+}
+
 function 停止任务并返回界面(reason) {
     停止当前任务(reason || "已停止");
     try {
@@ -5797,14 +5819,12 @@ function foundation() {
         myConsole("运行悬浮窗")
         if (悬浮窗启动方式 == 0) {
             if (参数 == '主程序') {
-                重置任务停止状态();
-                开始写作业统计(aimAPP || "-");
-                主程序线程 = threads.start(主程序);
+                启动自动化任务线程();
             }
             window.运行.attr("tint", "red");
             window.运行.attr("src", "ic_pause_black_48dp");
         } else {
-            主程序线程.interrupt();
+            停止任务并保留悬浮窗("已停止");
             window.运行.attr("tint", "#76EEC6");
             window.运行.attr("src", "ic_play_arrow_black_48dp");
         }
@@ -5837,16 +5857,13 @@ function foundation() {
             if (window.运行.attr("tint") == "#76EEC6") {
                 日志({ 文本: '物理启动中' });
                 if (参数 == '主程序') {
-                    重置任务停止状态();
-                    开始写作业统计(aimAPP || "-");
-                    主程序线程 = threads.start(主程序);
+                    启动自动化任务线程();
                 }
                 window.运行.attr("tint", "red");
                 window.运行.attr("src", "ic_pause_black_48dp");
             } else if (window.运行.attr("tint") == "red") {
                 日志({ 文本: '停止运行' });
-                结束写作业统计("已停止");
-                停止任务并返回界面("已停止");
+                停止任务并保留悬浮窗("已停止");
                 window.运行.attr("tint", "#76EEC6");
                 window.运行.attr("src", "ic_play_arrow_black_48dp");
             }
