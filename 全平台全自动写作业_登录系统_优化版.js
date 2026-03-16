@@ -3468,6 +3468,102 @@ function listenserInOtherPage() {
     })
 }
 
+function 获取自动化模块根目录() {
+    try {
+        let engine = engines.myEngine();
+        if (engine && typeof engine.cwd == "function") {
+            let cwd = engine.cwd();
+            if (cwd) return String(cwd).replace(/\\/g, "/").replace(/\/$/, "");
+        }
+    } catch (e) { }
+    try {
+        let cwd = files.cwd();
+        if (cwd) return String(cwd).replace(/\\/g, "/").replace(/\/$/, "");
+    } catch (e) { }
+    return ".";
+}
+
+function 获取自动化模块路径(appName) {
+    return 获取自动化模块根目录() + "/automation/apps/" + appName + ".js";
+}
+
+function 创建自动化共享对象() {
+    return {
+        toastLog: toastLog,
+        randomSleep: randomSleep,
+        安全等待: 安全等待,
+        clickCenterByObj: clickCenterByObj,
+        loopResultIdTimer: loopResultIdTimer,
+        loopResultTextTimer: loopResultTextTimer,
+        backIndexId: backIndexId,
+        threadRunOne: threadRunOne,
+        getIds: getIds,
+        创建写作业统计元信息: 创建写作业统计元信息,
+        记录写作业统计处理开始: 记录写作业统计处理开始,
+        记录写作业统计跳过: 记录写作业统计跳过,
+        记录写作业统计失败: 记录写作业统计失败,
+        记录写作业统计成功: 记录写作业统计成功,
+        judgeSex: judgeSex,
+        judgIsAnchor: judgIsAnchor,
+        judgMoneyValue: judgMoneyValue,
+        myConsole: myConsole,
+        RandomInt: RandomInt,
+        pressOk: pressOk,
+        setText: setText,
+        click: click,
+        idSelector: id,
+        get控件信息: function () { return 控件信息; },
+        getWithin: function () { return within; },
+        getFullIdPre: function () { return fullIdPre; },
+        getLongCache: function () { return long_cache; },
+        getCache: function () { return cache; },
+        putDateStorage: function (key, value) { return dateStorage.put(key, value); },
+        getPage: function () { return page; },
+        setPage: function (value) { page = value; dateStorage.put("page", page); return page; },
+        setRestartStatus: function (value) { RrstartStatus = value; return RrstartStatus; },
+        logAutomation: function (tag, payload, level) { return 记录自动化日志(tag, payload, level); }
+    };
+}
+
+function 加载自动化模块(appName) {
+    let modulePath = 获取自动化模块路径(appName);
+    if (!files.exists(modulePath)) {
+        return null;
+    }
+    let source = String(files.read(modulePath) || "");
+    let factory = new Function("shared", source + "\nreturn typeof createAutomationAdapter === 'function' ? createAutomationAdapter(shared) : null;");
+    let adapter = factory(创建自动化共享对象());
+    if (!adapter || typeof adapter.executeTask != "function") {
+        throw new Error("自动化模块格式错误: " + modulePath);
+    }
+    adapter.__modulePath = modulePath;
+    return adapter;
+}
+
+function 执行模块化自动化(appName) {
+    let adapter = 加载自动化模块(appName);
+    if (!adapter) return false;
+
+    let config = adapter.config || {};
+    idType = config.idType || idType;
+    apkPackage = config.apkPackage || apkPackage;
+    appVersion = config.appVersion || appVersion;
+    fullIdPre = config.fullIdPre || fullIdPre;
+    let launchAppName = config.launchAppName || config.appName || appName;
+
+    记录自动化日志("automation.module.loaded", {
+        appName: appName,
+        modulePath: adapter.__modulePath,
+        config: config
+    }, "INFO");
+
+    app.launchApp(launchAppName);
+    if (checkInstallApp()) {
+        adapter.executeTask();
+    }
+    return true;
+}
+
 function checkInstallApp() {
     if (!getAppName(apkPackage)) {
         dialogs.build({
@@ -3494,15 +3590,7 @@ function 主程序() {
         安全等待(3000)
         toastLog("启动APP" + aimAPP)
 
-        if (aimAPP === "咪鸭") {
-            idType = "page_data_9"
-            apkPackage = "com.jiuyin.mc"
-            appVersion = "1.6.51"
-            fullIdPre = "com.jiuyin.mc:id/"
-            app.launchApp("咪鸭")
-            if (checkInstallApp()) {
-                miya_idTask()
-            }
+        if (执行模块化自动化(aimAPP)) {
         } else if (aimAPP == "PP") {
             idType = "page_data_26"
             apkPackage = "com.lizhi.pplive"
@@ -4454,203 +4542,6 @@ function PP_idTask() {
             if (parseInt(page) === parseInt(res.data.total_pages)) {
                 myConsole("达到最大页数" + page)
                 break
-            } else {
-                page++
-                dateStorage.put("page", page)
-                myConsole("页数+1：" + page)
-            }
-        } else {
-            toastLog(res.msg + "60秒后重试")
-            安全等待(60 * 1000)
-        }
-    }
-}
-
-function miya_idTask() {
-    toastLog("寻找首页中...")
-    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-    if (!loopResultIdTimer(fullIdPre + "edit", 5)) {
-        backIndexId(fullIdPre + "iv_search")
-        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-        clickCenterByObj(loopResultIdTimer(fullIdPre + "iv_search", 8))
-    }
-    let timer = 0
-
-    while (1) {
-        let res = threadRunOne(getIds, within)
-        if (res.hasOwnProperty("code") && res.data.data.length > 0) {
-            toastLog("获取到" + res.data.data.length + "条ID数据")
-            for (let i = 0; i < res.data.data.length; i++) {
-                // 开始
-                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                let idStr
-                let 当前统计元信息 = 创建写作业统计元信息(res, res.data.data[i])
-                if (!(res.hasOwnProperty("type") && res["type"] == "local_id") && timer >= parseInt(控件信息.操作阈值)) {
-                    toastLog("达到操作阈值，任务停止...")
-                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                    return
-                }
-                记录写作业统计处理开始(当前统计元信息)
-                if (res.hasOwnProperty("type") && res["type"] == "local_id") {
-                    idStr = 当前统计元信息.id
-                } else {
-                    let sex = judgeSex()
-                    let jsonData = 当前统计元信息.jsonData || {}
-                    // console.log("当前数据:" + JSON.stringify(jsonData))
-                    if (sex !== "") {
-                        console.log("进入性别判断")
-                        if (jsonData["gender_text"] !== sex) {
-                            myConsole("性别" + jsonData["gender_text"] + "不符合")
-                            记录写作业统计跳过("性别不符", 当前统计元信息)
-                            continue
-                        }
-                    }
-                    let isAnchor = judgIsAnchor()
-                    if (isAnchor !== "" && jsonData["is_anchor"] !== null) {
-                        console.log("进入主播判断")
-                        if (jsonData["is_anchor"] !== isAnchor) {
-                            myConsole("模特" + jsonData["is_anchor"] + "不符合")
-                            记录写作业统计跳过("模特过滤", 当前统计元信息)
-                            continue
-                        }
-                    }
-                    let moneyValue = jsonData["value"]
-                    if (控件信息.消费范围_box) {
-                        console.log("进入消费范围判断")
-                        let isOk = judgMoneyValue(moneyValue)
-                        if (!isOk) {
-                            myConsole("消费范围" + moneyValue + "不符合")
-                            记录写作业统计跳过("消费范围不符", 当前统计元信息)
-                            continue
-                        }
-                    }
-                    idStr = 当前统计元信息.id
-                }
-                当前统计元信息.id = idStr ? String(idStr).trim() : ""
-                if (!当前统计元信息.id) {
-                    myConsole((res.data.data[i]["content"] || res.data.data[i]) + "===>" + idStr)
-                    记录写作业统计跳过("ID解析失败", 当前统计元信息)
-                    continue
-                }
-                idStr = 当前统计元信息.id
-                if (控件信息.重复不写_box) {
-                    if (long_cache.indexOf(idStr) != -1) {
-                        myConsole("long_cache idStr: " + idStr + "已存在缓存")
-                        记录写作业统计跳过("重复不写", 当前统计元信息)
-                        continue
-                    }
-                } else {
-                    if (cache.indexOf(idStr) != -1) {
-                        myConsole("idStr: " + idStr + "已存在缓存")
-                        记录写作业统计跳过("重复不写", 当前统计元信息)
-                        continue
-                    }
-                }
-
-                toastLog("开始ID: " + idStr) // text("搜索用户ID/房间ID")
-                long_cache.push(idStr)
-                dateStorage.put("long_cache", long_cache)
-
-                cache.push(idStr)
-                dateStorage.put("cache", cache)
-
-                let inputBar = loopResultIdTimer(fullIdPre + "edit", 5)
-                if (inputBar) {
-                    if (inputBar.clickable()) {
-                        inputBar.click()
-                    } else {
-                        clickCenterByObj(inputBar)
-                    }
-                }
-                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                setText(idStr.trim())
-                toastLog("等待搜索结果")
-                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                if (控件信息.搜索坐标_box) {
-                    toastLog("点击坐标: x" + 控件信息.搜索位置X + ",y" + 控件信息.搜索位置Y)
-                    if (parseInt(控件信息.搜索位置X) > 0 && parseInt(控件信息.搜索位置Y) > 0) {
-                        click(parseInt(控件信息.搜索位置X), parseInt(控件信息.搜索位置Y))
-                        RandomInt(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                    }
-                } else {
-                    toastLog("自动回车")
-                    pressOk()
-                }
-                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                let userID = loopResultIdTimer(fullIdPre + "tv_username", 5)
-                // let userIDs = text("ID: 22739121").visibleToUser(true).find()
-                if (!userID) {
-                    myConsole("id: " + idStr + "没有搜到")
-                    记录写作业统计跳过("搜索无结果", 当前统计元信息)
-                    continue
-                }
-
-                clickCenterByObj(userID)
-                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                let goChat = loopResultTextTimer("聊天", 5)
-                if (!goChat) {
-                    myConsole("id: " + idStr + "没有按钮")
-                    记录写作业统计跳过("无法进入聊天", 当前统计元信息)
-                    continue
-                } else {
-                    clickCenterByObj(goChat)
-                }
-                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                RrstartStatus = "正常"
-                if (控件信息.发送图片_box) {
-                    let imageBtn = loopResultIdTimer(fullIdPre + "chat_btn_album", 3)
-                    if (imageBtn && imageBtn.clickable()) {
-                        imageBtn.click()
-                    } else {
-                        clickCenterByObj(imageBtn)
-                    }
-                    let image_poses = 控件信息.图片位置.split(",").filter((Value) => {
-                        return parseInt(Value) > 0 && parseInt(Value) < 10;
-                    });
-                    loopResultIdTimer(fullIdPre + "select_frame")
-                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                    let imageSeles = id(fullIdPre + "select_frame").visibleToUser(true).find()
-                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                    toastLog("当前图片选择位置" + image_poses)
-                    console.log(image_poses)
-                    if (imageSeles.length >= image_poses.length) {
-                        image_poses.forEach(pos => {
-                            // sleep(actionSpeed)
-                            // console.log(imageSeles[aimPos])
-                            let aimPos = parseInt(pos) - 1
-                            if (imageSeles[aimPos].clickable()) {
-                                imageSeles[aimPos].click()
-                            } else {
-                                clickCenterByObj(imageSeles[aimPos])
-                            }
-                        })
-                    }
-                    randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                    clickCenterByObj(loopResultIdTimer(fullIdPre + "tv_complete", 3))
-                }
-                randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                if (控件信息.私信用户_box) {
-                    let msg = 控件信息.话术库list[RandomInt(0, 控件信息.话术库list.length - 1)]["data"]
-                    myConsole(msg)
-                    let msgs = msg.split("|")
-                    msgs.forEach(itemMsg => {
-                        setText(itemMsg)
-                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                        clickCenterByObj(loopResultIdTimer(fullIdPre + "chat_send_button", 5))
-                        randomSleep(parseInt(控件信息.操作延迟小), parseInt(控件信息.操作延迟大))
-                    })
-                }
-                let sleepTime = RandomInt(parseInt(控件信息.任务间隔小), parseInt(控件信息.任务间隔大))
-                toastLog("等待" + sleepTime + "秒")
-                安全等待(sleepTime * 1000)
-                backIndexId(fullIdPre + "edit")
-            }
-            myConsole("页数比较: " + page + ":" + res.data.total_pages)
-            if (parseInt(page) === parseInt(res.data.total_pages)) {
-                myConsole("达到最大页数" + page)
-                安全等待(3000)
-                continue
             } else {
                 page++
                 dateStorage.put("page", page)
