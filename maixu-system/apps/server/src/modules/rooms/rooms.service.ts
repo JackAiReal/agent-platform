@@ -1,22 +1,41 @@
 import { Injectable } from '@nestjs/common';
-import { DemoStoreService } from '../../common/demo/demo-store.service';
+import { RankRepository } from '../rank/repositories/rank.repository';
+import { SlotsRepository } from '../slots/repositories/slots.repository';
+import { RoomsRepository } from './repositories/rooms.repository';
 
 @Injectable()
 export class RoomsService {
-  constructor(private readonly demoStoreService: DemoStoreService) {}
+  constructor(
+    private readonly roomsRepository: RoomsRepository,
+    private readonly slotsRepository: SlotsRepository,
+    private readonly rankRepository: RankRepository,
+  ) {}
 
   getHealth() {
     return { module: 'rooms', ok: true };
   }
 
-  listRooms() {
-    return this.demoStoreService.listRooms();
+  async listRooms() {
+    const rooms = await this.roomsRepository.listRooms();
+
+    return Promise.all(
+      rooms.map(async (room) => {
+        const currentSlot = await this.slotsRepository.getRoomCurrentSlot(room.id);
+        const rank = await this.rankRepository.getRank(currentSlot.id);
+
+        return {
+          ...room,
+          currentSlot,
+          currentRankCount: rank.entries.length,
+        };
+      }),
+    );
   }
 
-  getRoom(roomId: string) {
-    const room = this.demoStoreService.getRoom(roomId);
-    const currentSlot = this.demoStoreService.getRoomCurrentSlot(room.id);
-    const rank = this.demoStoreService.getRank(currentSlot.id);
+  async getRoom(roomId: string) {
+    const room = await this.roomsRepository.getRoom(roomId);
+    const currentSlot = await this.slotsRepository.getRoomCurrentSlot(room.id);
+    const rank = await this.rankRepository.getRank(currentSlot.id);
 
     return {
       ...room,
@@ -26,8 +45,8 @@ export class RoomsService {
     };
   }
 
-  getCurrentSlot(roomId: string) {
-    const room = this.demoStoreService.getRoom(roomId);
-    return this.demoStoreService.getRoomCurrentSlot(room.id);
+  async getCurrentSlot(roomId: string) {
+    const room = await this.roomsRepository.getRoom(roomId);
+    return this.slotsRepository.getRoomCurrentSlot(room.id);
   }
 }

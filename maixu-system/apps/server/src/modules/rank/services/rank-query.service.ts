@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { DemoStoreService } from '../../../common/demo/demo-store.service';
+import { RankRepository } from '../repositories/rank.repository';
 
 @Injectable()
 export class RankQueryService {
-  constructor(private readonly demoStoreService: DemoStoreService) {}
+  constructor(private readonly rankRepository: RankRepository) {}
 
-  getSlotRank(slotId: string) {
-    return this.demoStoreService.getRank(slotId);
+  async getSlotRank(slotId: string) {
+    return this.rankRepository.getRank(slotId);
   }
 }

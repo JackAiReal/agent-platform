@@ -1,23 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { WsGateway } from '../../../infrastructure/ws/ws.gateway';
-import { DemoStoreService } from '../../../common/demo/demo-store.service';
+import { SlotsRepository } from '../../slots/repositories/slots.repository';
+import { RankRepository } from '../repositories/rank.repository';
 import { RankPolicyService } from './rank-policy.service';
 
 @Injectable()
 export class RankCommandService {
   constructor(
     private readonly rankPolicyService: RankPolicyService,
-    private readonly demoStoreService: DemoStoreService,
+    private readonly rankRepository: RankRepository,
+    private readonly slotsRepository: SlotsRepository,
     private readonly wsGateway: WsGateway,
   ) {}
 
-  join(slotId: string, payload: { userId: string; sourceContent: string; score: number }) {
-    const decision = this.rankPolicyService.canJoin(slotId, payload.userId, payload.score);
+  async join(slotId: string, payload: { userId: string; sourceContent: string; score: number }) {
+    const decision = await this.rankPolicyService.canJoin(slotId, payload.userId, payload.score);
     if (!decision.accepted) {
       return { slotId, accepted: false, reason: decision.reason, payload };
     }
 
-    const result = this.demoStoreService.joinRank({
+    const result = await this.rankRepository.joinRank({
       slotId,
       userId: payload.userId,
       sourceContent: payload.sourceContent,
@@ -25,8 +27,8 @@ export class RankCommandService {
       sourceType: 'KEYWORD',
     });
 
-    const slot = this.demoStoreService.getSlot(slotId);
-    const rank = this.demoStoreService.getRank(slotId);
+    const slot = await this.slotsRepository.getSlot(slotId);
+    const rank = await this.rankRepository.getRank(slotId);
     this.wsGateway.emitToRoom(slot.roomId, 'rank.updated', rank);
     this.wsGateway.emitToSlot(slotId, 'rank.updated', rank);
 
@@ -37,15 +39,15 @@ export class RankCommandService {
     };
   }
 
-  cancel(slotId: string, payload: { userId?: string; entryId?: string }) {
-    const result = this.demoStoreService.cancelRank({
+  async cancel(slotId: string, payload: { userId?: string; entryId?: string }) {
+    const result = await this.rankRepository.cancelRank({
       slotId,
       userId: payload.userId,
       entryId: payload.entryId,
     });
 
-    const slot = this.demoStoreService.getSlot(slotId);
-    const rank = this.demoStoreService.getRank(slotId);
+    const slot = await this.slotsRepository.getSlot(slotId);
+    const rank = await this.rankRepository.getRank(slotId);
     this.wsGateway.emitToRoom(slot.roomId, 'rank.updated', rank);
     this.wsGateway.emitToSlot(slotId, 'rank.updated', rank);
 
@@ -56,8 +58,8 @@ export class RankCommandService {
     };
   }
 
-  manualAdd(slotId: string, payload: { userId: string; sourceContent: string; score: number }) {
-    const result = this.demoStoreService.joinRank({
+  async manualAdd(slotId: string, payload: { userId: string; sourceContent: string; score: number }) {
+    const result = await this.rankRepository.joinRank({
       slotId,
       userId: payload.userId,
       sourceContent: payload.sourceContent,
@@ -65,8 +67,8 @@ export class RankCommandService {
       sourceType: 'MANUAL',
     });
 
-    const slot = this.demoStoreService.getSlot(slotId);
-    const rank = this.demoStoreService.getRank(slotId);
+    const slot = await this.slotsRepository.getSlot(slotId);
+    const rank = await this.rankRepository.getRank(slotId);
     this.wsGateway.emitToRoom(slot.roomId, 'rank.updated', rank);
     this.wsGateway.emitToSlot(slotId, 'rank.updated', rank);
 

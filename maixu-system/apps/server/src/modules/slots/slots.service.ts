@@ -1,17 +1,23 @@
 import { Injectable } from '@nestjs/common';
-import { DemoStoreService } from '../../common/demo/demo-store.service';
+import { RankRepository } from '../rank/repositories/rank.repository';
+import { RoomsRepository } from '../rooms/repositories/rooms.repository';
+import { SlotsRepository } from './repositories/slots.repository';
 
 @Injectable()
 export class SlotsService {
-  constructor(private readonly demoStoreService: DemoStoreService) {}
+  constructor(
+    private readonly slotsRepository: SlotsRepository,
+    private readonly roomsRepository: RoomsRepository,
+    private readonly rankRepository: RankRepository,
+  ) {}
 
   getHealth() {
     return { module: 'slots', ok: true };
   }
 
-  getSlot(slotId: string) {
-    const slot = this.demoStoreService.getSlot(slotId);
-    const room = this.demoStoreService.getRoom(slot.roomId);
+  async getSlot(slotId: string) {
+    const slot = await this.slotsRepository.getSlot(slotId);
+    const room = await this.roomsRepository.getRoom(slot.roomId);
 
     return {
       ...slot,
@@ -19,7 +25,7 @@ export class SlotsService {
     };
   }
 
-  getSlotRank(slotId: string) {
-    return this.demoStoreService.getRank(slotId);
+  async getSlotRank(slotId: string) {
+    return this.rankRepository.getRank(slotId);
   }
 }
