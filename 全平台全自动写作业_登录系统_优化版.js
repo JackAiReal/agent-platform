@@ -2468,9 +2468,12 @@ function 打开注册弹窗() {
 
 function 后端登录(emailOrUsername, password, loginExtra) {
     try {
+        let currentLoginType = String((loginExtra && (loginExtra.login_type || loginExtra.type)) || membershipAppCode || "default").trim() || "default";
         let loginPayload = {
             "email_or_username": emailOrUsername,
-            "password": password
+            "password": password,
+            "login_type": currentLoginType,
+            "type": currentLoginType
         };
         if (loginExtra && loginExtra.captcha_id) {
             loginPayload.captcha_id = loginExtra.captcha_id;
@@ -2481,6 +2484,7 @@ function 后端登录(emailOrUsername, password, loginExtra) {
 
         记录关键日志("auth.login.request", {
             account: emailOrUsername,
+            loginType: currentLoginType,
             hasCaptchaId: !!loginPayload.captcha_id,
             hasCaptchaCode: !!loginPayload.captcha_code
         });
