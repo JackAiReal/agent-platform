@@ -1,0 +1,529 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleCode {
+  USER
+  HOST
+  ROOM_ADMIN
+  SUPER_ADMIN
+  OPERATOR
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  BANNED
+}
+
+enum RoomStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum SlotState {
+  PENDING
+  OPENING
+  OPEN
+  SPEED_CLOSED
+  FINAL_OPEN
+  FINAL_CLOSED
+  SETTLED
+  CANCELLED
+}
+
+enum RankEntryStatus {
+  ACTIVE
+  CANCELLED
+  INVALID
+  REPLACED
+  TRANSFERRED
+  SETTLED
+}
+
+enum RankSourceType {
+  KEYWORD
+  MANUAL
+  FIXED
+  TOP_CARD
+  BUY8
+  INSERT
+  TRANSFER
+  CHALLENGE_PASS
+}
+
+enum RuleType {
+  SPEED
+  TASK
+  TOP
+  BUY8
+  INSERT
+  SPECIAL
+}
+
+enum ChallengeType {
+  MATH
+  IMAGE_CAPTCHA
+  FAKE_CODE
+  TWO_NUM
+  TWO_HANZI
+  QA
+}
+
+enum ChallengeStatus {
+  ACTIVE
+  EXPIRED
+  CLOSED
+}
+
+enum LeaveNoticeStatus {
+  ACTIVE
+  RETURNED
+  EXPIRED
+  CANCELLED
+}
+
+enum PerkType {
+  TOP_CARD
+  PRIORITY_JOIN
+  SPECIAL_SLOT
+  BUY8_TICKET
+}
+
+enum BanType {
+  QUEUE_BAN
+  TEMP_BAN
+  COOLDOWN
+  MUTE_ACTION
+}
+
+enum NotificationChannel {
+  MINIAPP
+  INBOX
+  WECOM
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum MetricSourceType {
+  USER
+  HOST
+  ADMIN
+  SYSTEM
+}
+
+model User {
+  id          String     @id @default(uuid()) @db.Uuid
+  openid      String?    @unique
+  unionid     String?    @unique
+  nickname    String
+  avatarUrl   String?
+  phone       String?
+  status      UserStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  roomRoles            UserRoomRole[]
+  hostSchedules        RoomHostSchedule[]   @relation("HostScheduleUser")
+  hostOverrides        RoomHostOverride[]   @relation("HostOverrideUser")
+  hostedSlots          RoomSlot[]           @relation("SlotHostUser")
+  rankEntries          RankEntry[]
+  challengeSubmissions ChallengeSubmission[]
+  leaveNotices         LeaveNotice[]
+  perkInventories      UserPerkInventory[]
+  perkUsageLogs        PerkUsageLog[]
+  actorMetricEvents    MetricEvent[]        @relation("MetricActorUser")
+  targetMetricEvents   MetricEvent[]        @relation("MetricTargetUser")
+  hostMetricEvents     MetricEvent[]        @relation("MetricHostUser")
+  banPolicies          RoomBanPolicy[]      @relation("BanPolicyUser")
+  notifications        NotificationLog[]    @relation("NotificationUser")
+
+  @@index([status])
+}
+
+model Room {
+  id            String     @id @default(uuid()) @db.Uuid
+  name          String
+  code          String     @unique
+  status        RoomStatus @default(ACTIVE)
+  description   String?
+  entryCoverUrl String?
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  roomRoles       UserRoomRole[]
+  configs         RoomConfig[]
+  hostSchedules   RoomHostSchedule[]
+  hostOverrides   RoomHostOverride[]
+  slots           RoomSlot[]
+  ruleSets        RoomRuleSet[]
+  perkInventories UserPerkInventory[]
+  perkUsageLogs   PerkUsageLog[]
+  metricEvents    MetricEvent[]
+  banPolicies     RoomBanPolicy[]
+  operatorLogs    OperatorLog[]
+
+  @@index([status, isActive])
+}
+
+model UserRoomRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  roomId    String   @db.Uuid
+  roleCode  RoleCode
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roomId, roleCode])
+  @@index([roomId, roleCode])
+  @@index([userId])
+}
+
+model RoomConfig {
+  id          String   @id @default(uuid()) @db.Uuid
+  roomId      String   @db.Uuid
+  configKey   String
+  configValue Json
+  updatedById String?  @db.Uuid
+  updatedAt   DateTime @updatedAt
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, configKey])
+  @@index([configKey])
+}
+
+model RoomHostSchedule {
+  id         String   @id @default(uuid()) @db.Uuid
+  roomId     String   @db.Uuid
+  weekday    Int
+  startHour  Int
+  endHour    Int
+  hostUserId String   @db.Uuid
+  priority   Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  room     Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  hostUser User @relation("HostScheduleUser", fields: [hostUserId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, weekday, startHour, endHour])
+  @@index([hostUserId])
+}
+
+model RoomHostOverride {
+  id          String   @id @default(uuid()) @db.Uuid
+  roomId      String   @db.Uuid
+  slotDate    DateTime @db.Date
+  slotHour    Int
+  hostUserId  String   @db.Uuid
+  oneTimeOnly Boolean  @default(true)
+  remark      String?
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  room     Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  hostUser User @relation("HostOverrideUser", fields: [hostUserId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, slotDate, slotHour])
+  @@index([hostUserId])
+}
+
+model RoomSlot {
+  id            String    @id @default(uuid()) @db.Uuid
+  roomId        String    @db.Uuid
+  slotDate      DateTime  @db.Date
+  slotHour      Int
+  startAt       DateTime
+  speedCloseAt  DateTime
+  finalCloseAt  DateTime
+  state         SlotState @default(PENDING)
+  hostUserId    String?   @db.Uuid
+  isFull        Boolean   @default(false)
+  settledAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  room               Room                @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  hostUser           User?               @relation("SlotHostUser", fields: [hostUserId], references: [id], onDelete: SetNull)
+  rankEntries        RankEntry[]
+  rankSnapshots      RankSnapshot[]
+  rankActionLogs     RankActionLog[]
+  challengeInstances ChallengeInstance[]
+  leaveNotices       LeaveNotice[]
+  perkUsageLogs      PerkUsageLog[]
+  metricEvents       MetricEvent[]
+  operatorLogs       OperatorLog[]
+
+  @@unique([roomId, slotDate, slotHour])
+  @@index([roomId, state])
+  @@index([startAt])
+  @@index([hostUserId])
+}
+
+model RoomRuleSet {
+  id          String   @id @default(uuid()) @db.Uuid
+  roomId      String   @db.Uuid
+  name        String
+  version     Int      @default(1)
+  isActive    Boolean  @default(true)
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  room  Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  items RoomRuleItem[]
+
+  @@index([roomId, isActive])
+}
+
+model RoomRuleItem {
+  id                String   @id @default(uuid()) @db.Uuid
+  ruleSetId         String   @db.Uuid
+  keyword           String
+  normalizedKeyword String
+  score             Decimal  @db.Decimal(10, 2)
+  ruleType          RuleType
+  isEnabled         Boolean  @default(true)
+  extra             Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  ruleSet RoomRuleSet @relation(fields: [ruleSetId], references: [id], onDelete: Cascade)
+
+  @@index([ruleSetId, normalizedKeyword])
+  @@index([ruleSetId, ruleType])
+}
+
+model ChallengeInstance {
+  id             String          @id @default(uuid()) @db.Uuid
+  roomSlotId     String          @db.Uuid
+  challengeType  ChallengeType
+  promptText     String
+  promptAssetUrl String?
+  answerHash     String
+  answerPayload  Json?
+  expiresAt      DateTime
+  status         ChallengeStatus @default(ACTIVE)
+  createdAt      DateTime        @default(now())
+
+  roomSlot    RoomSlot              @relation(fields: [roomSlotId], references: [id], onDelete: Cascade)
+  submissions ChallengeSubmission[]
+
+  @@index([roomSlotId, status])
+  @@index([expiresAt])
+}
+
+model ChallengeSubmission {
+  id                  String   @id @default(uuid()) @db.Uuid
+  challengeInstanceId String   @db.Uuid
+  userId              String   @db.Uuid
+  submitContent       String
+  isPassed            Boolean
+  createdAt           DateTime @default(now())
+
+  challengeInstance ChallengeInstance @relation(fields: [challengeInstanceId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([challengeInstanceId, userId])
+  @@index([userId, createdAt])
+}
+
+model RankEntry {
+  id            String          @id @default(uuid()) @db.Uuid
+  roomSlotId    String          @db.Uuid
+  userId        String          @db.Uuid
+  sourceType    RankSourceType
+  sourceContent String
+  score         Decimal         @db.Decimal(10, 2)
+  status        RankEntryStatus @default(ACTIVE)
+  isTop         Boolean         @default(false)
+  isBuy8        Boolean         @default(false)
+  isInsert      Boolean         @default(false)
+  originEntryId String?         @db.Uuid
+  metadata      Json?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  roomSlot RoomSlot @relation(fields: [roomSlotId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomSlotId, status])
+  @@index([roomSlotId, userId])
+  @@index([roomSlotId, score])
+  @@index([originEntryId])
+}
+
+model RankSnapshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  roomSlotId   String   @db.Uuid
+  snapshotType String
+  snapshotData Json
+  createdAt    DateTime @default(now())
+
+  roomSlot RoomSlot @relation(fields: [roomSlotId], references: [id], onDelete: Cascade)
+
+  @@index([roomSlotId, snapshotType])
+}
+
+model RankActionLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  roomSlotId     String   @db.Uuid
+  operatorUserId String?  @db.Uuid
+  targetUserId   String?  @db.Uuid
+  action         String
+  payload        Json?
+  createdAt      DateTime @default(now())
+
+  roomSlot RoomSlot @relation(fields: [roomSlotId], references: [id], onDelete: Cascade)
+
+  @@index([roomSlotId, action])
+  @@index([targetUserId])
+  @@index([operatorUserId, createdAt])
+}
+
+model LeaveNotice {
+  id             String            @id @default(uuid()) @db.Uuid
+  roomSlotId     String            @db.Uuid
+  userId         String            @db.Uuid
+  status         LeaveNoticeStatus @default(ACTIVE)
+  startAt        DateTime          @default(now())
+  returnDeadline DateTime
+  returnedAt     DateTime?
+  remindCount    Int               @default(0)
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  roomSlot RoomSlot @relation(fields: [roomSlotId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomSlotId, status])
+  @@index([userId, createdAt])
+}
+
+model UserPerkInventory {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  roomId    String    @db.Uuid
+  perkType  PerkType
+  quantity  Int       @default(0)
+  expireAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([userId, roomId, perkType])
+  @@index([expireAt])
+}
+
+model PerkUsageLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  roomId        String   @db.Uuid
+  roomSlotId    String?  @db.Uuid
+  perkType      PerkType
+  usedQuantity  Int
+  targetEntryId String?  @db.Uuid
+  payload       Json?
+  createdAt     DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room     Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomSlot RoomSlot? @relation(fields: [roomSlotId], references: [id], onDelete: SetNull)
+
+  @@index([userId, perkType])
+  @@index([roomSlotId])
+}
+
+model MetricEvent {
+  id           String           @id @default(uuid()) @db.Uuid
+  roomId       String           @db.Uuid
+  roomSlotId   String?          @db.Uuid
+  metricKey    String
+  actorUserId  String           @db.Uuid
+  targetUserId String?          @db.Uuid
+  delta        Decimal          @db.Decimal(10, 2)
+  hostUserId   String?          @db.Uuid
+  sourceType   MetricSourceType
+  remark       String?
+  createdAt    DateTime         @default(now())
+
+  room       Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomSlot   RoomSlot? @relation(fields: [roomSlotId], references: [id], onDelete: SetNull)
+  actorUser  User      @relation("MetricActorUser", fields: [actorUserId], references: [id], onDelete: Cascade)
+  targetUser User?     @relation("MetricTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+  hostUser   User?     @relation("MetricHostUser", fields: [hostUserId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, metricKey, createdAt])
+  @@index([roomSlotId])
+  @@index([actorUserId])
+}
+
+model RoomBanPolicy {
+  id          String   @id @default(uuid()) @db.Uuid
+  roomId      String   @db.Uuid
+  userId      String   @db.Uuid
+  banType     BanType
+  reason      String?
+  startAt     DateTime @default(now())
+  endAt       DateTime?
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation("BanPolicyUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, userId, banType])
+  @@index([endAt])
+}
+
+model OperatorLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  roomId         String?  @db.Uuid
+  roomSlotId     String?  @db.Uuid
+  operatorUserId String?  @db.Uuid
+  action         String
+  targetType     String?
+  targetId       String?
+  payload        Json?
+  createdAt      DateTime @default(now())
+
+  room     Room?     @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  roomSlot RoomSlot? @relation(fields: [roomSlotId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, createdAt])
+  @@index([roomSlotId, createdAt])
+  @@index([operatorUserId, createdAt])
+}
+
+model NotificationLog {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String?            @db.Uuid
+  channel      NotificationChannel
+  templateCode String?
+  payload      Json
+  status       NotificationStatus @default(PENDING)
+  errorMessage String?
+  createdAt    DateTime           @default(now())
+
+  user User? @relation("NotificationUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, channel])
+  @@index([status, createdAt])
+}

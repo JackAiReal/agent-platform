@@ -1,0 +1,14 @@
+{
+  "name": "maixu-system",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/server"
+  ],
+  "scripts": {
+    "dev:server": "npm --workspace @maixu/server run start:dev",
+    "build:server": "npm --workspace @maixu/server run build",
+    "prisma:generate": "npm --workspace @maixu/server run prisma:generate",
+    "prisma:migrate": "npm --workspace @maixu/server run prisma:migrate"
+  }
+}
