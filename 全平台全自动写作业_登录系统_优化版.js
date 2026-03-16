@@ -42,7 +42,7 @@ const FETCH_API_CONFIG = {
     ttlSeconds: 300
 };
 
-const 写作业云端配置API = "http://192.168.2.161:5666/api";
+const 写作业云端配置API = "http://idbot.8188811.xyz/api";
 const 写作业云端资源基址 = 写作业云端配置API.replace(/\/api\/?$/, "");
 const 写作业云端图片目录 = "/sdcard/Pictures/写作业云端素材";
 const 写作业云端音频目录 = "/sdcard/Music/写作业云端素材";
@@ -883,10 +883,19 @@ function 关闭云端同步进度() {
 function 获取云端素材完整地址(assetPath) {
     assetPath = String(assetPath || "").trim();
     if (!assetPath) return "";
-    if (/^https?:\/\//i.test(assetPath)) return assetPath;
+
+    if (/^https?:\/\//i.test(assetPath)) {
+        return assetPath.replace(/^(https?:\/\/idbot\.8188811\.xyz)(\/uploads\/)/i, "$1/api$2");
+    }
+
     if (assetPath.charAt(0) != "/") {
         assetPath = "/" + assetPath;
     }
+
+    if (/^\/uploads\//i.test(assetPath)) {
+        assetPath = "/api" + assetPath;
+    }
+
     return 写作业云端资源基址 + assetPath;
 }
 
