@@ -1,13 +1,23 @@
 import { Button, Input, Text, View } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { getCurrentInstance, useDidShow } from '@tarojs/taro';
 import { useState } from 'react';
+import { restoreSession } from '../../../services/auth';
 import { sdk, setAccessToken, setCurrentUser } from '../../../services/sdk';
 import { showError, showSuccess } from '../../../utils/message';
 import './index.scss';
 
 export default function LoginPage() {
+  const redirect = getCurrentInstance().router?.params?.redirect;
   const [nickname, setNickname] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useDidShow(() => {
+    restoreSession().then((user) => {
+      if (user) {
+        Taro.redirectTo({ url: redirect || '/pages/rooms/index/index' });
+      }
+    });
+  });
 
   const handleLogin = async () => {
     if (!nickname.trim()) {
@@ -21,7 +31,7 @@ export default function LoginPage() {
       setAccessToken(result.accessToken);
       setCurrentUser(result.user);
       showSuccess('登录成功');
-      Taro.redirectTo({ url: '/pages/rooms/index/index' });
+      Taro.redirectTo({ url: redirect || '/pages/rooms/index/index' });
     } catch (error) {
       showError(error);
     } finally {

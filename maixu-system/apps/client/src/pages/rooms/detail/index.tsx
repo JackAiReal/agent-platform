@@ -1,12 +1,14 @@
 import { Button, Text, View } from '@tarojs/components';
-import Taro, { getCurrentInstance, useDidShow } from '@tarojs/taro';
-import { useMemo, useState } from 'react';
+import Taro, { getCurrentInstance, useDidShow, useUnload } from '@tarojs/taro';
+import { useMemo, useRef, useState } from 'react';
 import type { RankResponseVO, RoomDetailVO, UserVO } from '@maixu/frontend-sdk';
+import { requireLogin } from '../../../services/auth';
 import { getCurrentUser, sdk } from '../../../services/sdk';
 import { showError, showSuccess } from '../../../utils/message';
 import './index.scss';
 
 export default function RoomDetailPage() {
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const roomId = getCurrentInstance().router?.params?.roomId || '';
   const [room, setRoom] = useState<RoomDetailVO | null>(null);
   const [rank, setRank] = useState<RankResponseVO | null>(null);
@@ -29,9 +31,19 @@ export default function RoomDetailPage() {
   };
 
   useDidShow(() => {
-    if (roomId) {
+    if (!roomId) return;
+    requireLogin(`/pages/rooms/detail/index?roomId=${roomId}`).then((user) => {
+      if (!user) return;
       loadData();
-    }
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        loadData();
+      }, 5000);
+    });
+  });
+
+  useUnload(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
   });
 
   const handleJoin = async (content: string, score: number) => {
@@ -71,6 +83,12 @@ export default function RoomDetailPage() {
         <Text className='subtitle'>{room.description || '暂无描述'}</Text>
         <View className='subtitle'>当前档：{room.currentSlot.slotHour} 点</View>
         <View className='subtitle'>状态：{rank?.slot.state || room.currentSlot.state}</View>
+        <View className='subtitle'>当前用户：{currentUser?.nickname || '未登录'}</View>
+        <View className='btn-row' style={{ marginTop: '16px' }}>
+          <Button onClick={() => Taro.navigateTo({ url: `/pages/host/dashboard/index?slotId=${room.currentSlot.id}` })}>
+            打开主持台
+          </Button>
+        </View>
       </View>
 
       <View className='card'>

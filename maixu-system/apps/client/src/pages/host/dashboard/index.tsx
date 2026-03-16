@@ -1,16 +1,20 @@
 import { Button, Input, Text, View } from '@tarojs/components';
-import Taro, { getCurrentInstance, useDidShow } from '@tarojs/taro';
-import { useState } from 'react';
+import Taro, { getCurrentInstance, useDidShow, useUnload } from '@tarojs/taro';
+import { useRef, useState } from 'react';
 import type { HostDashboardVO } from '@maixu/frontend-sdk';
-import { sdk } from '../../../services/sdk';
+import { buildUserLabel, requireLogin } from '../../../services/auth';
+import { getCurrentUser, sdk } from '../../../services/sdk';
+import { rankToDashboard } from '../../../utils/dashboard';
 import { showError, showSuccess } from '../../../utils/message';
 import './index.scss';
 
 export default function HostDashboardPage() {
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slotId = getCurrentInstance().router?.params?.slotId || '';
   const [dashboard, setDashboard] = useState<HostDashboardVO | null>(null);
   const [manualUserId, setManualUserId] = useState('');
   const [transferTargetId, setTransferTargetId] = useState('');
+  const currentUser = getCurrentUser<{ nickname?: string; id?: string }>();
 
   const loadDashboard = async () => {
     try {
@@ -22,9 +26,19 @@ export default function HostDashboardPage() {
   };
 
   useDidShow(() => {
-    if (slotId) {
+    if (!slotId) return;
+    requireLogin(`/pages/host/dashboard/index?slotId=${slotId}`).then((user) => {
+      if (!user) return;
       loadDashboard();
-    }
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        loadDashboard();
+      }, 5000);
+    });
+  });
+
+  useUnload(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
   });
 
   const firstEntryId = dashboard?.entries[0]?.id;
@@ -37,19 +51,7 @@ export default function HostDashboardPage() {
         sourceContent: '手动加麦',
         score: 999,
       });
-      setDashboard({
-        slot: result.currentRank.slot,
-        room: result.currentRank.room,
-        summary: {
-          totalEntries: result.currentRank.entries.length,
-          topCount: result.currentRank.topEntries.length,
-          maxRank: result.currentRank.maxRank,
-          state: result.currentRank.slot.state,
-          isFull: result.currentRank.slot.isFull,
-        },
-        entries: result.currentRank.entries,
-        topEntries: result.currentRank.topEntries,
-      });
+      setDashboard(rankToDashboard(result.currentRank));
       showSuccess('手动加榜成功');
     } catch (error) {
       showError(error);
@@ -59,19 +61,7 @@ export default function HostDashboardPage() {
   const handleInvalidate = async (entryId: string) => {
     try {
       const result = await sdk.rank.invalidateEntry(slotId, { entryId });
-      setDashboard({
-        slot: result.currentRank.slot,
-        room: result.currentRank.room,
-        summary: {
-          totalEntries: result.currentRank.entries.length,
-          topCount: result.currentRank.topEntries.length,
-          maxRank: result.currentRank.maxRank,
-          state: result.currentRank.slot.state,
-          isFull: result.currentRank.slot.isFull,
-        },
-        entries: result.currentRank.entries,
-        topEntries: result.currentRank.topEntries,
-      });
+      setDashboard(rankToDashboard(result.currentRank));
       showSuccess('已作废');
     } catch (error) {
       showError(error);
@@ -85,19 +75,7 @@ export default function HostDashboardPage() {
         entryId: firstEntryId,
         toUserId: transferTargetId.trim(),
       });
-      setDashboard({
-        slot: result.currentRank.slot,
-        room: result.currentRank.room,
-        summary: {
-          totalEntries: result.currentRank.entries.length,
-          topCount: result.currentRank.topEntries.length,
-          maxRank: result.currentRank.maxRank,
-          state: result.currentRank.slot.state,
-          isFull: result.currentRank.slot.isFull,
-        },
-        entries: result.currentRank.entries,
-        topEntries: result.currentRank.topEntries,
-      });
+      setDashboard(rankToDashboard(result.currentRank));
       showSuccess('转麦成功');
     } catch (error) {
       showError(error);
@@ -109,6 +87,16 @@ export default function HostDashboardPage() {
       await sdk.slots.closeSpeedStage(slotId);
       await loadDashboard();
       showSuccess('已提前截手速');
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  const handleCloseFinal = async () => {
+    try {
+      await sdk.slots.closeFinalStage(slotId);
+      await loadDashboard();
+      showSuccess('已关闭最终报名');
     } catch (error) {
       showError(error);
     }
@@ -127,19 +115,7 @@ export default function HostDashboardPage() {
   const handleReset = async () => {
     try {
       const result = await sdk.rank.resetSlot(slotId);
-      setDashboard({
-        slot: result.currentRank.slot,
-        room: result.currentRank.room,
-        summary: {
-          totalEntries: result.currentRank.entries.length,
-          topCount: result.currentRank.topEntries.length,
-          maxRank: result.currentRank.maxRank,
-          state: result.currentRank.slot.state,
-          isFull: result.currentRank.slot.isFull,
-        },
-        entries: result.currentRank.entries,
-        topEntries: result.currentRank.topEntries,
-      });
+      setDashboard(rankToDashboard(result.currentRank));
       showSuccess('已重置本档');
     } catch (error) {
       showError(error);
@@ -154,7 +130,8 @@ export default function HostDashboardPage() {
     <View className='container'>
       <View className='card'>
         <View className='title'>主持控制台</View>
-        <Text className='subtitle'>{dashboard.room.name}</Text>
+        <Text className='subtitle'>当前主持：{buildUserLabel(currentUser)}</Text>
+        <View className='subtitle'>{dashboard.room.name}</View>
         <View className='subtitle'>当前状态：{dashboard.summary.state}</View>
         <View className='subtitle'>总人数：{dashboard.summary.totalEntries}</View>
       </View>
@@ -163,6 +140,7 @@ export default function HostDashboardPage() {
         <View className='title'>档期控制</View>
         <View className='btn-row action-group'>
           <Button className='primary-btn' onClick={handleCloseSpeed}>提前截手速</Button>
+          <Button onClick={handleCloseFinal}>关闭最终报名</Button>
           <Button onClick={() => handleToggleAdd(true)}>开启补排</Button>
           <Button onClick={() => handleToggleAdd(false)}>关闭补排</Button>
           <Button className='danger-btn' onClick={handleReset}>重置本档</Button>
@@ -171,12 +149,22 @@ export default function HostDashboardPage() {
 
       <View className='card'>
         <View className='title'>手动操作</View>
-        <Input className='input-line' placeholder='手动加榜 userId' value={manualUserId} onInput={(e) => setManualUserId(e.detail.value)} />
+        <Input
+          className='input-line'
+          placeholder='手动加榜 userId'
+          value={manualUserId}
+          onInput={(e) => setManualUserId(e.detail.value)}
+        />
         <View className='btn-row action-group'>
           <Button className='success-btn' onClick={handleManualAdd}>手动加榜</Button>
         </View>
 
-        <Input className='input-line' placeholder='转麦目标 userId（默认转榜首）' value={transferTargetId} onInput={(e) => setTransferTargetId(e.detail.value)} />
+        <Input
+          className='input-line'
+          placeholder='转麦目标 userId（默认转榜首）'
+          value={transferTargetId}
+          onInput={(e) => setTransferTargetId(e.detail.value)}
+        />
         <View className='btn-row action-group'>
           <Button onClick={handleTransfer}>转麦（榜首）</Button>
         </View>

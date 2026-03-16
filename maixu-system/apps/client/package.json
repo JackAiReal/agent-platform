@@ -16,7 +16,8 @@
     "@tarojs/taro": "4.1.11",
     "@tarojs/vite-runner": "4.1.11",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "socket.io-client": "4.8.1"
   },
   "devDependencies": {
     "@tarojs/cli": "4.1.11",
