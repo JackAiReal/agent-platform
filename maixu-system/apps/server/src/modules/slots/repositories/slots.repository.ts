@@ -81,12 +81,23 @@ export class SlotsRepository {
 
   async updateSlotIsFull(slotId: string, isFull: boolean) {
     if (this.useDemoMode) {
-      return this.demoStoreService.getSlot(slotId);
+      return this.demoStoreService.updateSlotIsFull(slotId, isFull);
     }
 
     return this.prisma.roomSlot.update({
       where: { id: slotId },
       data: { isFull },
+    });
+  }
+
+  async updateSlotState(slotId: string, state: SlotState) {
+    if (this.useDemoMode) {
+      return this.demoStoreService.updateSlotState(slotId, state);
+    }
+
+    return this.prisma.roomSlot.update({
+      where: { id: slotId },
+      data: { state },
     });
   }
 }

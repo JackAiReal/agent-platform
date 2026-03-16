@@ -35,4 +35,19 @@ export class RankController {
   manualAdd(@Param('slotId') slotId: string, @Body() body: { userId: string; sourceContent: string; score: number }) {
     return this.rankCommandService.manualAdd(slotId, body);
   }
+
+  @Post('slots/:slotId/invalidate-entry')
+  invalidateEntry(@Param('slotId') slotId: string, @Body() body: { entryId: string }) {
+    return this.rankCommandService.invalidateEntry(slotId, body);
+  }
+
+  @Post('slots/:slotId/transfer-entry')
+  transferEntry(@Param('slotId') slotId: string, @Body() body: { entryId: string; toUserId: string }) {
+    return this.rankCommandService.transferEntry(slotId, body);
+  }
+
+  @Post('slots/:slotId/reset-slot')
+  resetSlot(@Param('slotId') slotId: string) {
+    return this.rankCommandService.resetSlot(slotId);
+  }
 }

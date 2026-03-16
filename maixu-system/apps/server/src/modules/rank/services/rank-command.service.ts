@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { SlotState } from '@prisma/client';
 import { WsGateway } from '../../../infrastructure/ws/ws.gateway';
 import { SlotsRepository } from '../../slots/repositories/slots.repository';
 import { RankRepository } from '../repositories/rank.repository';
@@ -27,16 +28,7 @@ export class RankCommandService {
       sourceType: 'KEYWORD',
     });
 
-    const slot = await this.slotsRepository.getSlot(slotId);
-    const rank = await this.rankRepository.getRank(slotId);
-    this.wsGateway.emitToRoom(slot.roomId, 'rank.updated', rank);
-    this.wsGateway.emitToSlot(slotId, 'rank.updated', rank);
-
-    return {
-      slotId,
-      ...result,
-      currentRank: rank,
-    };
+    return this.emitRankChanged(slotId, result);
   }
 
   async cancel(slotId: string, payload: { userId?: string; entryId?: string }) {
@@ -46,16 +38,7 @@ export class RankCommandService {
       entryId: payload.entryId,
     });
 
-    const slot = await this.slotsRepository.getSlot(slotId);
-    const rank = await this.rankRepository.getRank(slotId);
-    this.wsGateway.emitToRoom(slot.roomId, 'rank.updated', rank);
-    this.wsGateway.emitToSlot(slotId, 'rank.updated', rank);
-
-    return {
-      slotId,
-      ...result,
-      currentRank: rank,
-    };
+    return this.emitRankChanged(slotId, result);
   }
 
   async manualAdd(slotId: string, payload: { userId: string; sourceContent: string; score: number }) {
@@ -67,6 +50,30 @@ export class RankCommandService {
       sourceType: 'MANUAL',
     });
 
+    return this.emitRankChanged(slotId, {
+      mode: 'manual',
+      ...result,
+    });
+  }
+
+  async invalidateEntry(slotId: string, payload: { entryId: string }) {
+    const result = await this.rankRepository.invalidateEntry(slotId, payload.entryId);
+    return this.emitRankChanged(slotId, result);
+  }
+
+  async transferEntry(slotId: string, payload: { entryId: string; toUserId: string }) {
+    const result = await this.rankRepository.transferEntry(slotId, payload);
+    return this.emitRankChanged(slotId, result);
+  }
+
+  async resetSlot(slotId: string) {
+    const result = await this.rankRepository.resetSlotRank(slotId);
+    await this.slotsRepository.updateSlotIsFull(slotId, false);
+    await this.slotsRepository.updateSlotState(slotId, SlotState.OPEN);
+    return this.emitRankChanged(slotId, result, true);
+  }
+
+  private async emitRankChanged(slotId: string, result: Record<string, unknown>, includeSlot = false) {
     const slot = await this.slotsRepository.getSlot(slotId);
     const rank = await this.rankRepository.getRank(slotId);
     this.wsGateway.emitToRoom(slot.roomId, 'rank.updated', rank);
@@ -74,8 +81,8 @@ export class RankCommandService {
 
     return {
       slotId,
-      mode: 'manual',
       ...result,
+      ...(includeSlot ? { slot } : {}),
       currentRank: rank,
     };
   }

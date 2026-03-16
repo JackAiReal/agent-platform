@@ -22,7 +22,7 @@ type DemoRoom = {
   };
 };
 
-type DemoSlotState = 'PENDING' | 'OPEN' | 'FINAL_OPEN' | 'FINAL_CLOSED' | 'SETTLED';
+type DemoSlotState = 'PENDING' | 'OPENING' | 'OPEN' | 'SPEED_CLOSED' | 'FINAL_OPEN' | 'FINAL_CLOSED' | 'SETTLED' | 'CANCELLED';
 
 type DemoSlot = {
   id: string;
@@ -36,16 +36,17 @@ type DemoSlot = {
   isFull: boolean;
 };
 
-type DemoRankEntryStatus = 'ACTIVE' | 'CANCELLED' | 'REPLACED';
+type DemoRankEntryStatus = 'ACTIVE' | 'CANCELLED' | 'REPLACED' | 'INVALID' | 'TRANSFERRED';
 
 type DemoRankEntry = {
   id: string;
   roomSlotId: string;
   userId: string;
-  sourceType: 'KEYWORD' | 'MANUAL';
+  sourceType: 'KEYWORD' | 'MANUAL' | 'TRANSFER';
   sourceContent: string;
   score: number;
   status: DemoRankEntryStatus;
+  originEntryId?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -215,6 +216,18 @@ export class DemoStoreService {
     return this.ensureCurrentSlot(roomId);
   }
 
+  updateSlotState(slotId: string, state: DemoSlotState) {
+    const slot = this.getSlot(slotId);
+    slot.state = state;
+    return slot;
+  }
+
+  updateSlotIsFull(slotId: string, isFull: boolean) {
+    const slot = this.getSlot(slotId);
+    slot.isFull = isFull;
+    return slot;
+  }
+
   getActiveRankEntries(slotId: string) {
     return this.rankEntries.filter((item) => item.roomSlotId === slotId && item.status === 'ACTIVE');
   }
@@ -320,6 +333,82 @@ export class DemoStoreService {
     return {
       cancelled: true,
       entry,
+    };
+  }
+
+  invalidateEntry(payload: { slotId: string; entryId: string }) {
+    const entry = this.rankEntries.find(
+      (item) => item.roomSlotId === payload.slotId && item.id === payload.entryId && item.status === 'ACTIVE',
+    );
+
+    if (!entry) {
+      throw new NotFoundException('active rank entry not found');
+    }
+
+    entry.status = 'INVALID';
+    entry.updatedAt = new Date().toISOString();
+
+    return {
+      invalidated: true,
+      entry,
+    };
+  }
+
+  transferEntry(payload: { slotId: string; entryId: string; toUserId: string }) {
+    const entry = this.rankEntries.find(
+      (item) => item.roomSlotId === payload.slotId && item.id === payload.entryId && item.status === 'ACTIVE',
+    );
+
+    if (!entry) {
+      throw new NotFoundException('active rank entry not found');
+    }
+
+    const targetUser = this.getUserById(payload.toUserId);
+    if (!targetUser) {
+      throw new NotFoundException('target user not found');
+    }
+
+    entry.status = 'TRANSFERRED';
+    entry.updatedAt = new Date().toISOString();
+
+    const transferred: DemoRankEntry = {
+      id: randomUUID(),
+      roomSlotId: payload.slotId,
+      userId: payload.toUserId,
+      sourceType: 'TRANSFER',
+      sourceContent: `转麦:${entry.sourceContent}`,
+      score: entry.score,
+      originEntryId: entry.id,
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.rankEntries.push(transferred);
+
+    return {
+      transferred: true,
+      fromEntryId: entry.id,
+      toEntry: transferred,
+    };
+  }
+
+  resetSlotRank(slotId: string) {
+    let affectedCount = 0;
+    for (const entry of this.rankEntries) {
+      if (entry.roomSlotId === slotId && entry.status === 'ACTIVE') {
+        entry.status = 'CANCELLED';
+        entry.updatedAt = new Date().toISOString();
+        affectedCount += 1;
+      }
+    }
+
+    const slot = this.getSlot(slotId);
+    slot.isFull = false;
+
+    return {
+      reset: true,
+      affectedCount,
     };
   }
 

@@ -208,4 +208,104 @@ export class RankRepository {
       },
     };
   }
+
+  async invalidateEntry(slotId: string, entryId: string) {
+    if (this.useDemoMode) {
+      return this.demoStoreService.invalidateEntry({ slotId, entryId });
+    }
+
+    const entry = await this.prisma.rankEntry.findFirst({
+      where: {
+        id: entryId,
+        roomSlotId: slotId,
+        status: RankEntryStatus.ACTIVE,
+      },
+    });
+
+    if (!entry) {
+      throw new NotFoundException('active rank entry not found');
+    }
+
+    const updated = await this.prisma.rankEntry.update({
+      where: { id: entry.id },
+      data: { status: RankEntryStatus.INVALID },
+    });
+
+    return {
+      invalidated: true,
+      entry: {
+        ...updated,
+        score: Number(updated.score),
+      },
+    };
+  }
+
+  async transferEntry(slotId: string, payload: { entryId: string; toUserId: string }) {
+    if (this.useDemoMode) {
+      return this.demoStoreService.transferEntry({ slotId, ...payload });
+    }
+
+    const entry = await this.prisma.rankEntry.findFirst({
+      where: {
+        id: payload.entryId,
+        roomSlotId: slotId,
+        status: RankEntryStatus.ACTIVE,
+      },
+    });
+
+    if (!entry) {
+      throw new NotFoundException('active rank entry not found');
+    }
+
+    const targetUser = await this.prisma.user.findUnique({ where: { id: payload.toUserId } });
+    if (!targetUser) {
+      throw new NotFoundException('target user not found');
+    }
+
+    await this.prisma.rankEntry.update({
+      where: { id: entry.id },
+      data: { status: RankEntryStatus.TRANSFERRED },
+    });
+
+    const transferred = await this.prisma.rankEntry.create({
+      data: {
+        roomSlotId: slotId,
+        userId: payload.toUserId,
+        sourceType: RankSourceType.TRANSFER,
+        sourceContent: `转麦:${entry.sourceContent}`,
+        score: entry.score,
+        originEntryId: entry.id,
+      },
+    });
+
+    return {
+      transferred: true,
+      fromEntryId: entry.id,
+      toEntry: {
+        ...transferred,
+        score: Number(transferred.score),
+      },
+    };
+  }
+
+  async resetSlotRank(slotId: string) {
+    if (this.useDemoMode) {
+      return this.demoStoreService.resetSlotRank(slotId);
+    }
+
+    const result = await this.prisma.rankEntry.updateMany({
+      where: {
+        roomSlotId: slotId,
+        status: RankEntryStatus.ACTIVE,
+      },
+      data: {
+        status: RankEntryStatus.CANCELLED,
+      },
+    });
+
+    return {
+      reset: true,
+      affectedCount: result.count,
+    };
+  }
 }
