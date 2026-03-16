@@ -3495,6 +3495,7 @@ function 创建自动化共享对象() {
         clickCenterByObj: clickCenterByObj,
         loopResultIdTimer: loopResultIdTimer,
         loopResultTextTimer: loopResultTextTimer,
+        backIndex: backIndex,
         backIndexId: backIndexId,
         threadRunOne: threadRunOne,
         getIds: getIds,
