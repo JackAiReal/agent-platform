@@ -1,0 +1,19 @@
+.rank-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.rank-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rank-right {
+  color: #2563eb;
+  font-weight: 700;
+}

@@ -1,0 +1,14 @@
+{
+  "miniprogramRoot": "dist",
+  "projectname": "maixu-client",
+  "description": "Maixu Taro client",
+  "appid": "touristappid",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": false
+  },
+  "compileType": "miniprogram"
+}

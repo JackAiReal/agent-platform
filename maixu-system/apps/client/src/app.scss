@@ -1,0 +1,51 @@
+page {
+  background: #f7f8fa;
+  color: #111827;
+  font-size: 28px;
+}
+
+.container {
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 34px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.subtitle {
+  font-size: 26px;
+  color: #6b7280;
+}
+
+.btn-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.primary-btn {
+  background: #2563eb;
+  color: #fff;
+}
+
+.danger-btn {
+  background: #dc2626;
+  color: #fff;
+}
+
+.success-btn {
+  background: #16a34a;
+  color: #fff;
+}

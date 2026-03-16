@@ -3,12 +3,16 @@
   "private": true,
   "version": "0.1.0",
   "workspaces": [
-    "apps/server",
+    "apps/*",
     "packages/*"
   ],
   "scripts": {
     "dev:server": "npm --workspace @maixu/server run start:dev",
     "build:server": "npm --workspace @maixu/server run build",
+    "dev:client:h5": "npm --workspace @maixu/client run dev:h5",
+    "dev:client:weapp": "npm --workspace @maixu/client run dev:weapp",
+    "build:client:h5": "npm --workspace @maixu/client run build:h5",
+    "build:client:weapp": "npm --workspace @maixu/client run build:weapp",
     "build:sdk": "npm --workspace @maixu/frontend-sdk run build",
     "prisma:generate": "npm --workspace @maixu/server run prisma:generate",
     "prisma:migrate": "npm --workspace @maixu/server run prisma:migrate",
