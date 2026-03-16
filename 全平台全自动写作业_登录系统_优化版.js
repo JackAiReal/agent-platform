@@ -3092,6 +3092,11 @@ function 首页ui() {
     ui.运行.click(() => {
         toastLog("开始运行");
         ui控件存储();
+        let selectedApp = ui.platForms.getSelectedItem();
+        if (!外部自动化模块存在(selectedApp)) {
+            提示缺少自动化模块(selectedApp);
+            return;
+        }
         if (!权限检测({ 悬浮窗: true, 无障碍: true })) { return; }
 
         if (!当前App会员可用()) {
@@ -3487,6 +3492,26 @@ function 获取自动化模块路径(appName) {
     return 获取自动化模块根目录() + "/" + appName + ".js";
 }
 
+function 外部自动化模块存在(appName) {
+    let modulePath = 获取自动化模块路径(appName);
+    try {
+        return files.exists(modulePath) === true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function 提示缺少自动化模块(appName) {
+    let modulePath = 获取自动化模块路径(appName);
+    let tipText = appName + " 暂时不支持该app，请在当前目录放入对应模块文件：" + appName + ".js";
+    toastLog(tipText);
+    dialogs.build({
+        title: "友情提示",
+        content: tipText + "\n\n模块路径：" + modulePath,
+        positive: "确定",
+    }).show();
+}
+
 function 创建自动化共享对象() {
     return {
         toastLog: toastLog,
@@ -3592,15 +3617,8 @@ function 主程序() {
         toastLog("启动APP" + aimAPP)
 
         if (!执行模块化自动化(aimAPP)) {
-            let modulePath = 获取自动化模块路径(aimAPP)
-            let tipText = aimAPP + " 暂时不支持该app，请在当前目录放入对应模块文件：" + aimAPP + ".js"
             写作业统计结束状态 = "暂不支持"
-            toastLog(tipText)
-            dialogs.build({
-                title: "友情提示",
-                content: tipText + "\n\n模块路径：" + modulePath,
-                positive: "确定",
-            }).show();
+            提示缺少自动化模块(aimAPP)
             安全等待(3000)
             return
         }
