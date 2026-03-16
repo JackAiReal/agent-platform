@@ -3335,6 +3335,15 @@ function 创建任务停止异常(reason) {
     return err;
 }
 
+function 是否任务中断异常(error) {
+    let text = String(error || "");
+    return !!(error && error.__taskStopped)
+        || text.indexOf("InterruptedException") != -1
+        || text.indexOf("ScriptInterruptedException") != -1
+        || text.indexOf("script exiting") != -1
+        || text.indexOf("TASK_STOPPED") != -1;
+}
+
 function 检查任务是否停止() {
     if (是否任务停止中()) {
         throw 创建任务停止异常(任务停止原因 || "TASK_STOPPED");
@@ -3346,7 +3355,14 @@ function 安全等待(ms) {
     while (ms > 0) {
         检查任务是否停止();
         let step = Math.min(ms, 200);
-        sleep(step);
+        try {
+            sleep(step);
+        } catch (error) {
+            if (是否任务停止中() || 是否任务中断异常(error)) {
+                throw 创建任务停止异常(任务停止原因 || "TASK_STOPPED");
+            }
+            throw error;
+        }
         ms -= step;
     }
     检查任务是否停止();
@@ -3486,7 +3502,7 @@ function listenserInOtherPage() {
                 }
             }
         } catch (error) {
-            if (!(error && error.__taskStopped)) {
+            if (!是否任务中断异常(error)) {
                 console.log(error)
             }
         } finally {
@@ -3645,8 +3661,7 @@ function 主程序() {
             return
         }
     } catch (error) {
-        let errText = String(error || "");
-        if ((error && error.__taskStopped) || errText.indexOf("InterruptedException") != -1 || errText.indexOf("script exiting") != -1 || errText.indexOf("TASK_STOPPED") != -1) {
+        if (是否任务中断异常(error)) {
             写作业统计结束状态 = "已停止";
             return
         } else {
