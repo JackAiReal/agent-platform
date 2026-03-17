@@ -9,10 +9,12 @@ export interface AuthLoginPayload {
   nickname: string;
   avatarUrl?: string;
   openid?: string;
+  code?: string;
 }
 
 export interface AuthLoginResponse {
   accessToken: string;
+  refreshToken?: string;
   tokenType: 'Bearer' | string;
   user: UserVO;
 }

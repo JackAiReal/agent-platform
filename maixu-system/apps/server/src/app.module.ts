@@ -10,6 +10,7 @@ import { RedisModule } from './infrastructure/redis/redis.module';
 import { WsModule } from './infrastructure/ws/ws.module';
 import { LoggerModule } from './infrastructure/logger/logger.module';
 import { DemoStoreModule } from './common/demo/demo-store.module';
+import { IdempotencyModule } from './common/idempotency/idempotency.module';
 import { RepositoriesModule } from './common/repositories/repositories.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -33,6 +34,7 @@ import { AuditModule } from './modules/audit/audit.module';
     ScheduleModule.forRoot(),
     LoggerModule,
     DemoStoreModule,
+    IdempotencyModule,
     RepositoriesModule,
     PrismaModule,
     RedisModule,

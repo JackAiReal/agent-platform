@@ -11,6 +11,18 @@ export function createNotificationsApi(client: ApiHttpClient) {
       return client.post<NotificationTimeoutCheckResponse>('/notifications/leave-notices/check-timeouts', payload, true);
     },
 
+    dispatchPending(limit = 100) {
+      return client.post<{ dispatched: number; failed: number; skipped: number }>(
+        '/notifications/dispatch-pending',
+        { limit },
+        true,
+      );
+    },
+
+    metrics() {
+      return client.get<Record<string, unknown>>('/notifications/metrics', true);
+    },
+
     logs(payload?: { status?: string; limit?: number }) {
       const query = new URLSearchParams();
       if (payload?.status) query.set('status', payload.status);

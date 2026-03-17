@@ -23,4 +23,16 @@ export class NotificationsController {
   listLogs(@Query('status') status?: NotificationStatus, @Query('limit') limit?: string) {
     return this.notificationsService.listLogs({ status, limit: Number(limit) || 50 });
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('dispatch-pending')
+  dispatchPending(@Body() body?: { limit?: number }) {
+    return this.notificationsService.dispatchPendingNotifications(Number(body?.limit) || 100);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('metrics')
+  metrics() {
+    return this.notificationsService.getMetrics();
+  }
 }

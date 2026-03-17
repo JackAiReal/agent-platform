@@ -1,5 +1,5 @@
 import { RoleCode } from '@prisma/client';
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { SlotRoleGuard } from '../../common/auth/slot-role.guard';
@@ -42,15 +42,23 @@ export class SlotsController {
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post(':slotId/close-speed-stage')
-  closeSpeedStage(@Param('slotId') slotId: string, @CurrentUser() user: { sub: string }) {
-    return this.slotsService.closeSpeedStage(slotId, user.sub);
+  closeSpeedStage(
+    @Param('slotId') slotId: string,
+    @CurrentUser() user: { sub: string },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.slotsService.closeSpeedStage(slotId, user.sub, idempotencyKey);
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post(':slotId/close-final-stage')
-  closeFinalStage(@Param('slotId') slotId: string, @CurrentUser() user: { sub: string }) {
-    return this.slotsService.closeFinalStage(slotId, user.sub);
+  closeFinalStage(
+    @Param('slotId') slotId: string,
+    @CurrentUser() user: { sub: string },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.slotsService.closeFinalStage(slotId, user.sub, idempotencyKey);
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
@@ -60,7 +68,8 @@ export class SlotsController {
     @Param('slotId') slotId: string,
     @CurrentUser() user: { sub: string },
     @Body() body: { enabled: boolean },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
   ) {
-    return this.slotsService.toggleAddStage(slotId, body.enabled, user.sub);
+    return this.slotsService.toggleAddStage(slotId, body.enabled, user.sub, idempotencyKey);
   }
 }

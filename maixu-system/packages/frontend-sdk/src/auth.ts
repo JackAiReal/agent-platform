@@ -14,5 +14,9 @@ export function createAuthApi(client: ApiHttpClient) {
     me() {
       return client.get<UserVO>('/auth/me', true);
     },
+
+    refresh(refreshToken: string) {
+      return client.post<AuthLoginResponse>('/auth/refresh', { refreshToken });
+    },
   };
 }

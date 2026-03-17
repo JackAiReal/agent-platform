@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { SlotState } from '@prisma/client';
 import { DemoStoreService } from '../../common/demo/demo-store.service';
+import { IdempotencyService } from '../../common/idempotency/idempotency.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { WsGateway } from '../../infrastructure/ws/ws.gateway';
 import { AuditService } from '../audit/audit.service';
@@ -17,6 +18,7 @@ export class SlotsService {
     private readonly demoStoreService: DemoStoreService,
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly idempotencyService: IdempotencyService,
     private readonly wsGateway: WsGateway,
   ) {}
 
@@ -86,41 +88,47 @@ export class SlotsService {
     }));
   }
 
-  async closeSpeedStage(slotId: string, operatorUserId?: string) {
-    const slot = await this.slotsRepository.updateSlotState(slotId, SlotState.FINAL_OPEN);
-    await this.logHostAction(slotId, operatorUserId, 'slot.close_speed_stage');
-    await this.emitRankUpdated(slotId);
-    return {
-      slotId,
-      action: 'closeSpeedStage',
-      slot,
-    };
-  }
-
-  async closeFinalStage(slotId: string, operatorUserId?: string) {
-    const slot = await this.slotsRepository.updateSlotState(slotId, SlotState.FINAL_CLOSED);
-    await this.logHostAction(slotId, operatorUserId, 'slot.close_final_stage');
-    await this.emitRankUpdated(slotId);
-    return {
-      slotId,
-      action: 'closeFinalStage',
-      slot,
-    };
-  }
-
-  async toggleAddStage(slotId: string, enabled: boolean, operatorUserId?: string) {
-    const slot = await this.slotsRepository.updateSlotState(slotId, enabled ? SlotState.FINAL_OPEN : SlotState.FINAL_CLOSED);
-    await this.logHostAction(slotId, operatorUserId, 'slot.toggle_add_stage', {
-      enabled,
-      nextState: slot.state,
+  async closeSpeedStage(slotId: string, operatorUserId?: string, idempotencyKey?: string) {
+    return this.idempotencyService.execute(`slot:close-speed:${slotId}`, idempotencyKey, async () => {
+      const slot = await this.slotsRepository.updateSlotState(slotId, SlotState.FINAL_OPEN);
+      await this.logHostAction(slotId, operatorUserId, 'slot.close_speed_stage');
+      await this.emitRankUpdated(slotId);
+      return {
+        slotId,
+        action: 'closeSpeedStage',
+        slot,
+      };
     });
-    await this.emitRankUpdated(slotId);
-    return {
-      slotId,
-      action: 'toggleAddStage',
-      enabled,
-      slot,
-    };
+  }
+
+  async closeFinalStage(slotId: string, operatorUserId?: string, idempotencyKey?: string) {
+    return this.idempotencyService.execute(`slot:close-final:${slotId}`, idempotencyKey, async () => {
+      const slot = await this.slotsRepository.updateSlotState(slotId, SlotState.FINAL_CLOSED);
+      await this.logHostAction(slotId, operatorUserId, 'slot.close_final_stage');
+      await this.emitRankUpdated(slotId);
+      return {
+        slotId,
+        action: 'closeFinalStage',
+        slot,
+      };
+    });
+  }
+
+  async toggleAddStage(slotId: string, enabled: boolean, operatorUserId?: string, idempotencyKey?: string) {
+    return this.idempotencyService.execute(`slot:toggle-add:${slotId}:${enabled ? '1' : '0'}`, idempotencyKey, async () => {
+      const slot = await this.slotsRepository.updateSlotState(slotId, enabled ? SlotState.FINAL_OPEN : SlotState.FINAL_CLOSED);
+      await this.logHostAction(slotId, operatorUserId, 'slot.toggle_add_stage', {
+        enabled,
+        nextState: slot.state,
+      });
+      await this.emitRankUpdated(slotId);
+      return {
+        slotId,
+        action: 'toggleAddStage',
+        enabled,
+        slot,
+      };
+    });
   }
 
   private async logHostAction(slotId: string, operatorUserId?: string, action?: string, payload?: Record<string, unknown>) {

@@ -1,5 +1,5 @@
 import { RoleCode } from '@prisma/client';
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { SlotRoleGuard } from '../../common/auth/slot-role.guard';
@@ -30,13 +30,18 @@ export class RankController {
   join(
     @Param('slotId') slotId: string,
     @Body() body: { userId: string; sourceContent: string; score: number; challengeTicket?: string },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
   ) {
-    return this.rankCommandService.join(slotId, body);
+    return this.rankCommandService.join(slotId, body, idempotencyKey);
   }
 
   @Post('slots/:slotId/cancel')
-  cancel(@Param('slotId') slotId: string, @Body() body: { userId?: string; entryId?: string }) {
-    return this.rankCommandService.cancel(slotId, body);
+  cancel(
+    @Param('slotId') slotId: string,
+    @Body() body: { userId?: string; entryId?: string },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.rankCommandService.cancel(slotId, body, idempotencyKey);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -45,11 +50,16 @@ export class RankController {
     @Param('slotId') slotId: string,
     @CurrentUser() user: { sub: string },
     @Body() body: { sourceContent?: string },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
   ) {
-    return this.rankCommandService.useTopCard(slotId, {
-      userId: user.sub,
-      sourceContent: body.sourceContent,
-    });
+    return this.rankCommandService.useTopCard(
+      slotId,
+      {
+        userId: user.sub,
+        sourceContent: body.sourceContent,
+      },
+      idempotencyKey,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -58,12 +68,17 @@ export class RankController {
     @Param('slotId') slotId: string,
     @CurrentUser() user: { sub: string },
     @Body() body: { sourceContent?: string; score?: number },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
   ) {
-    return this.rankCommandService.useBuy8(slotId, {
-      userId: user.sub,
-      sourceContent: body.sourceContent,
-      score: body.score,
-    });
+    return this.rankCommandService.useBuy8(
+      slotId,
+      {
+        userId: user.sub,
+        sourceContent: body.sourceContent,
+        score: body.score,
+      },
+      idempotencyKey,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -72,19 +87,28 @@ export class RankController {
     @Param('slotId') slotId: string,
     @CurrentUser() user: { sub: string },
     @Body() body: { targetRank: number; sourceContent?: string },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
   ) {
-    return this.rankCommandService.useInsert(slotId, {
-      userId: user.sub,
-      targetRank: body.targetRank,
-      sourceContent: body.sourceContent,
-    });
+    return this.rankCommandService.useInsert(
+      slotId,
+      {
+        userId: user.sub,
+        targetRank: body.targetRank,
+        sourceContent: body.sourceContent,
+      },
+      idempotencyKey,
+    );
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post('slots/:slotId/settle')
-  settle(@Param('slotId') slotId: string, @CurrentUser() user: { sub: string }) {
-    return this.rankCommandService.settle(slotId, user.sub);
+  settle(
+    @Param('slotId') slotId: string,
+    @CurrentUser() user: { sub: string },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.rankCommandService.settle(slotId, user.sub, idempotencyKey);
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
@@ -94,8 +118,9 @@ export class RankController {
     @Param('slotId') slotId: string,
     @CurrentUser() user: { sub: string },
     @Body() body: { userId: string; sourceContent: string; score: number },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
   ) {
-    return this.rankCommandService.manualAdd(slotId, body, user.sub);
+    return this.rankCommandService.manualAdd(slotId, body, user.sub, idempotencyKey);
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
@@ -105,8 +130,9 @@ export class RankController {
     @Param('slotId') slotId: string,
     @CurrentUser() user: { sub: string },
     @Body() body: { entryId: string },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
   ) {
-    return this.rankCommandService.invalidateEntry(slotId, body, user.sub);
+    return this.rankCommandService.invalidateEntry(slotId, body, user.sub, idempotencyKey);
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
@@ -116,14 +142,19 @@ export class RankController {
     @Param('slotId') slotId: string,
     @CurrentUser() user: { sub: string },
     @Body() body: { entryId: string; toUserId: string },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
   ) {
-    return this.rankCommandService.transferEntry(slotId, body, user.sub);
+    return this.rankCommandService.transferEntry(slotId, body, user.sub, idempotencyKey);
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post('slots/:slotId/reset-slot')
-  resetSlot(@Param('slotId') slotId: string, @CurrentUser() user: { sub: string }) {
-    return this.rankCommandService.resetSlot(slotId, user.sub);
+  resetSlot(
+    @Param('slotId') slotId: string,
+    @CurrentUser() user: { sub: string },
+    @Headers('x-idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.rankCommandService.resetSlot(slotId, user.sub, idempotencyKey);
   }
 }

@@ -43,6 +43,7 @@ export default function RoomsPage() {
 
   const handleLogout = () => {
     Taro.removeStorageSync('maixu_access_token');
+    Taro.removeStorageSync('maixu_refresh_token');
     Taro.removeStorageSync('maixu_user_info');
     Taro.redirectTo({ url: '/pages/auth/login/index' });
   };

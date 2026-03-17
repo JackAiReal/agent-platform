@@ -16,8 +16,13 @@ export class AuthController {
   }
 
   @Post('wechat-mini/login')
-  wechatMiniLogin(@Body() body: { nickname: string; avatarUrl?: string; openid?: string }) {
-    return this.authService.devLogin(body);
+  wechatMiniLogin(@Body() body: { code?: string; nickname?: string; avatarUrl?: string; openid?: string }) {
+    return this.authService.wechatMiniLogin(body);
+  }
+
+  @Post('refresh')
+  refresh(@Body() body: { refreshToken: string }) {
+    return this.authService.refresh(body.refreshToken);
   }
 
   @Get('me')

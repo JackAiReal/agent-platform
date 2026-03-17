@@ -2,7 +2,7 @@ import { Button, Input, Text, View } from '@tarojs/components';
 import Taro, { getCurrentInstance, useDidShow } from '@tarojs/taro';
 import { useState } from 'react';
 import { restoreSession } from '../../../services/auth';
-import { sdk, setAccessToken, setCurrentUser } from '../../../services/sdk';
+import { sdk, setAccessToken, setCurrentUser, setRefreshToken } from '../../../services/sdk';
 import { showError, showSuccess } from '../../../utils/message';
 import './index.scss';
 
@@ -42,6 +42,9 @@ export default function LoginPage() {
       setLoading(true);
       const result = await sdk.auth.devLogin(payload);
       setAccessToken(result.accessToken);
+      if (result.refreshToken) {
+        setRefreshToken(result.refreshToken);
+      }
       setCurrentUser(result.user);
       showSuccess('登录成功');
       Taro.redirectTo({ url: redirect || '/pages/rooms/index/index' });

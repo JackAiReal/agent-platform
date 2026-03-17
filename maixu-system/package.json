@@ -17,6 +17,8 @@
     "db:up": "./scripts/db-up.sh",
     "db:down": "./scripts/db-down.sh",
     "db:logs": "./scripts/db-logs.sh",
+    "backup:db": "./scripts/backup-db.sh",
+    "restore:db": "./scripts/restore-db.sh",
     "prisma:generate": "npm --workspace @maixu/server run prisma:generate",
     "prisma:migrate": "npm --workspace @maixu/server run prisma:migrate",
     "prisma:seed": "npm --workspace @maixu/server run prisma:seed",
