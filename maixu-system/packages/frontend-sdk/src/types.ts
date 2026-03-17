@@ -21,6 +21,8 @@ export interface RoomConfigVO {
   maxRank: number;
   orderStartMinute: number;
   orderStopMinute: number;
+  enableChallenge?: boolean;
+  challengeTtlSeconds?: number;
 }
 
 export interface SlotVO {
@@ -82,6 +84,7 @@ export interface JoinRankPayload {
   userId: string;
   sourceContent: string;
   score: number;
+  challengeTicket?: string;
 }
 
 export interface CancelRankPayload {
@@ -178,6 +181,36 @@ export interface RankPoliciesVO {
   insert: string;
   cancel: string;
   transfer: string;
+}
+
+export interface ChallengeIssuePayload {
+  userId: string;
+}
+
+export interface ChallengeIssueResponse {
+  enabled: boolean;
+  bypass: boolean;
+  reason?: string;
+  challengeId?: string;
+  challengeType?: string;
+  promptText?: string;
+  expiresAt?: string;
+  ttlSeconds?: number;
+  expectedAnswer?: string;
+}
+
+export interface ChallengeVerifyPayload {
+  challengeId: string;
+  userId: string;
+  answer: string;
+}
+
+export interface ChallengeVerifyResponse {
+  passed: boolean;
+  reason: string | null;
+  challengeId: string;
+  ticket?: string;
+  expiresAt?: string;
 }
 
 export interface ApiErrorPayload {

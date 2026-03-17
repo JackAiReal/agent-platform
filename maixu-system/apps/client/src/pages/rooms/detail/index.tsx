@@ -46,14 +46,68 @@ export default function RoomDetailPage() {
     if (timerRef.current) clearInterval(timerRef.current);
   });
 
+  const ensureChallengeTicket = async () => {
+    if (!room || !currentUser?.id || !room.config.enableChallenge) {
+      return undefined;
+    }
+
+    const issueResult = await sdk.challenges.issue(room.currentSlot.id, {
+      userId: currentUser.id,
+    });
+
+    if (!issueResult.enabled || issueResult.bypass) {
+      return undefined;
+    }
+
+    const modal = await Taro.showModal({
+      title: '排麦挑战验证',
+      content: issueResult.promptText || '请输入挑战答案',
+      editable: true,
+      placeholderText: '请输入答案',
+      confirmText: '提交',
+      cancelText: '取消',
+    });
+
+    if (!modal.confirm) {
+      throw new Error('已取消挑战验证');
+    }
+
+    const answer = (modal.content || '').trim();
+    if (!answer) {
+      throw new Error('请输入挑战答案');
+    }
+
+    const verifyResult = await sdk.challenges.verify(room.currentSlot.id, {
+      challengeId: issueResult.challengeId || '',
+      userId: currentUser.id,
+      answer,
+    });
+
+    if (!verifyResult.passed || !verifyResult.ticket) {
+      throw new Error(verifyResult.reason || '挑战验证失败，请重试');
+    }
+
+    return verifyResult.ticket;
+  };
+
   const handleJoin = async (content: string, score: number) => {
     if (!room || !currentUser?.id) return;
     try {
+      const challengeTicket = await ensureChallengeTicket();
       const result = await sdk.rank.join(room.currentSlot.id, {
         userId: currentUser.id,
         sourceContent: content,
         score,
+        challengeTicket,
       });
+
+      if (!result.accepted) {
+        if (result.currentRank) {
+          setRank(result.currentRank);
+        }
+        throw new Error(result.reason || '排麦失败');
+      }
+
       setRank(result.currentRank);
       showSuccess(`排麦成功 No.${result.rank ?? '-'}`);
     } catch (error) {
@@ -84,6 +138,7 @@ export default function RoomDetailPage() {
         <View className='subtitle'>当前档：{room.currentSlot.slotHour} 点</View>
         <View className='subtitle'>状态：{rank?.slot.state || room.currentSlot.state}</View>
         <View className='subtitle'>当前用户：{currentUser?.nickname || '未登录'}</View>
+        <View className='subtitle'>挑战验证：{room.config.enableChallenge ? '开启' : '关闭'}</View>
         <View className='btn-row' style={{ marginTop: '16px' }}>
           <Button onClick={() => Taro.navigateTo({ url: `/pages/host/dashboard/index?slotId=${room.currentSlot.id}` })}>
             打开主持台
@@ -104,6 +159,9 @@ export default function RoomDetailPage() {
         ) : (
           <>
             <View className='subtitle'>你当前不在榜单中</View>
+            {room.config.enableChallenge ? (
+              <View className='challenge-tip'>加榜前需完成挑战验证</View>
+            ) : null}
             <View className='btn-row'>
               <Button className='primary-btn' onClick={() => handleJoin('手速', 0)}>手速</Button>
               <Button className='success-btn' onClick={() => handleJoin('任务A', 20)}>任务A</Button>

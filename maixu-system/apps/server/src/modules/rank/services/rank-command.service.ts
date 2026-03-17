@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { SlotState } from '@prisma/client';
 import { WsGateway } from '../../../infrastructure/ws/ws.gateway';
+import { ChallengesService } from '../../challenges/challenges.service';
 import { SlotsRepository } from '../../slots/repositories/slots.repository';
 import { RankRepository } from '../repositories/rank.repository';
 import { RankPolicyService } from './rank-policy.service';
@@ -11,13 +12,19 @@ export class RankCommandService {
     private readonly rankPolicyService: RankPolicyService,
     private readonly rankRepository: RankRepository,
     private readonly slotsRepository: SlotsRepository,
+    private readonly challengesService: ChallengesService,
     private readonly wsGateway: WsGateway,
   ) {}
 
-  async join(slotId: string, payload: { userId: string; sourceContent: string; score: number }) {
+  async join(slotId: string, payload: { userId: string; sourceContent: string; score: number; challengeTicket?: string }) {
+    const challenge = await this.challengesService.assertJoinAllowed(slotId, payload.userId, payload.challengeTicket);
+    if (!challenge.verified) {
+      return this.buildRejectedJoinResult(slotId, payload, challenge.reason ?? 'challenge verification failed');
+    }
+
     const decision = await this.rankPolicyService.canJoin(slotId, payload.userId, payload.score);
     if (!decision.accepted) {
-      return { slotId, accepted: false, reason: decision.reason, payload };
+      return this.buildRejectedJoinResult(slotId, payload, decision.reason ?? 'join rejected by policy');
     }
 
     const result = await this.rankRepository.joinRank({
@@ -71,6 +78,22 @@ export class RankCommandService {
     await this.slotsRepository.updateSlotIsFull(slotId, false);
     await this.slotsRepository.updateSlotState(slotId, SlotState.OPEN);
     return this.emitRankChanged(slotId, result, true);
+  }
+
+  private async buildRejectedJoinResult(
+    slotId: string,
+    payload: { userId: string; sourceContent: string; score: number; challengeTicket?: string },
+    reason: string,
+  ) {
+    const currentRank = await this.rankRepository.getRank(slotId);
+
+    return {
+      slotId,
+      accepted: false,
+      reason,
+      payload,
+      currentRank,
+    };
   }
 
   private async emitRankChanged(slotId: string, result: Record<string, unknown>, includeSlot = false) {

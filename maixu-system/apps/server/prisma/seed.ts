@@ -113,7 +113,8 @@ async function main() {
     order_add_minute: 20,
     allow_cancel: true,
     allow_buy8: true,
-    enable_challenge: false,
+    enable_challenge: true,
+    challenge_ttl_seconds: 120,
   });
 
   await seedRoomConfigs(roomB.id, {
@@ -124,6 +125,7 @@ async function main() {
     allow_cancel: true,
     allow_buy8: false,
     enable_challenge: false,
+    challenge_ttl_seconds: 120,
   });
 
   const roomRoles = [

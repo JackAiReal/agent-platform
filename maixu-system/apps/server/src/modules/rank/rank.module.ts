@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ChallengesModule } from '../challenges/challenges.module';
 import { RankController } from './rank.controller';
 import { RankQueryService } from './services/rank-query.service';
 import { RankCommandService } from './services/rank-command.service';
@@ -11,6 +12,7 @@ import { CancelPolicy } from './policies/cancel.policy';
 import { TransferPolicy } from './policies/transfer.policy';
 
 @Module({
+  imports: [ChallengesModule],
   controllers: [RankController],
   providers: [
     RankQueryService,

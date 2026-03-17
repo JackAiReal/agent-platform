@@ -26,7 +26,10 @@ export class RankController {
   }
 
   @Post('slots/:slotId/join')
-  join(@Param('slotId') slotId: string, @Body() body: { userId: string; sourceContent: string; score: number }) {
+  join(
+    @Param('slotId') slotId: string,
+    @Body() body: { userId: string; sourceContent: string; score: number; challengeTicket?: string },
+  ) {
     return this.rankCommandService.join(slotId, body);
   }
 

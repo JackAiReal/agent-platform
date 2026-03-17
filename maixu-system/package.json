@@ -21,6 +21,7 @@
     "prisma:migrate": "npm --workspace @maixu/server run prisma:migrate",
     "prisma:seed": "npm --workspace @maixu/server run prisma:seed",
     "prisma:deploy": "npm --workspace @maixu/server run prisma:deploy",
-    "smoke:db": "node scripts/smoke-db-flow.mjs"
+    "smoke:db": "node scripts/smoke-db-flow.mjs",
+    "smoke:challenge": "node scripts/smoke-challenge-flow.mjs"
   }
 }

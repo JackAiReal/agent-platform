@@ -70,6 +70,18 @@ npm run smoke:db
 ✅ Smoke test passed: PostgreSQL mode main flow is healthy
 ```
 
+### 6) 跑 challenge 主链路 smoke test
+
+```bash
+npm run smoke:challenge
+```
+
+通过后会输出：
+
+```text
+✅ Challenge smoke passed
+```
+
 ---
 
 ## 前端快速联调
@@ -100,3 +112,4 @@ npm run dev:client:weapp
 - `npm run prisma:generate` / `npm run prisma:migrate` / `npm run prisma:seed`
 - `npm run dev:client:h5` / `npm run dev:client:weapp`
 - `npm run smoke:db`：数据库模式主链路冒烟
+- `npm run smoke:challenge`：challenge 验证 + ticket 加榜冒烟

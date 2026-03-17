@@ -20,6 +20,8 @@ type DemoRoom = {
     maxRank: number;
     orderStartMinute: number;
     orderStopMinute: number;
+    enableChallenge: boolean;
+    challengeTtlSeconds: number;
   };
 };
 
@@ -81,6 +83,8 @@ export class DemoStoreService {
         maxRank: 7,
         orderStartMinute: 0,
         orderStopMinute: 10,
+        enableChallenge: true,
+        challengeTtlSeconds: 120,
       },
     };
 
@@ -94,6 +98,8 @@ export class DemoStoreService {
         maxRank: 8,
         orderStartMinute: 0,
         orderStopMinute: 12,
+        enableChallenge: false,
+        challengeTtlSeconds: 120,
       },
     };
 

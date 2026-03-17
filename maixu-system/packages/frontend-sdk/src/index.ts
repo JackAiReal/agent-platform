@@ -1,4 +1,5 @@
 import { createAuthApi } from './auth';
+import { createChallengesApi } from './challenges';
 import { ApiHttpClient, ApiTransport, createFetchTransport, createTaroTransport, MaixuSdkOptions } from './http';
 import { createRankApi } from './rank';
 import { createRoomsApi } from './rooms';
@@ -16,6 +17,7 @@ export function createMaixuSdk(options: MaixuSdkOptions) {
     rooms: createRoomsApi(client),
     slots: createSlotsApi(client),
     rank: createRankApi(client),
+    challenges: createChallengesApi(client),
   };
 }
 

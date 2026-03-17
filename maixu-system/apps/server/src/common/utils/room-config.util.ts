@@ -2,6 +2,8 @@ export type RuntimeRoomConfig = {
   maxRank: number;
   orderStartMinute: number;
   orderStopMinute: number;
+  enableChallenge: boolean;
+  challengeTtlSeconds: number;
 };
 
 export function buildRuntimeRoomConfig(configs: Array<{ configKey: string; configValue: unknown }>): RuntimeRoomConfig {
@@ -11,10 +13,14 @@ export function buildRuntimeRoomConfig(configs: Array<{ configKey: string; confi
     configMap.set(item.configKey, item.configValue);
   }
 
+  const challengeTtlSeconds = Number(configMap.get('challenge_ttl_seconds') ?? 120);
+
   return {
     maxRank: Number(configMap.get('max_rank') ?? 7),
     orderStartMinute: Number(configMap.get('order_start_minute') ?? 0),
     orderStopMinute: Number(configMap.get('order_stop_minute') ?? 10),
+    enableChallenge: Boolean(configMap.get('enable_challenge') ?? false),
+    challengeTtlSeconds: Number.isFinite(challengeTtlSeconds) && challengeTtlSeconds > 0 ? challengeTtlSeconds : 120,
   };
 }
 

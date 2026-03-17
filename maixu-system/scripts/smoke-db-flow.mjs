@@ -58,7 +58,7 @@ async function main() {
   const rooms = await request('/rooms');
   assert(Array.isArray(rooms) && rooms.length > 0, 'rooms is empty');
 
-  const room = rooms.find((item) => item.code === 'voice-hall-a') || rooms[0];
+  const room = rooms.find((item) => item.code === 'voice-hall-b') || rooms[0];
   assert(room?.id, 'missing room id');
 
   const slot = await request(`/rooms/${room.id}/current-slot`);
