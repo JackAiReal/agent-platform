@@ -1,4 +1,4 @@
-export default defineAppConfig({
+export default {
   pages: [
     'pages/auth/login/index',
     'pages/rooms/index/index',
@@ -13,4 +13,4 @@ export default defineAppConfig({
     navigationBarTextStyle: 'black',
     backgroundColor: '#f7f8fa',
   },
-});
+};
