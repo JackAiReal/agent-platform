@@ -4,16 +4,19 @@ import { useRef, useState } from 'react';
 import type { HostDashboardVO } from '@maixu/frontend-sdk';
 import { buildUserLabel, requireLogin } from '../../../services/auth';
 import { getCurrentUser, sdk } from '../../../services/sdk';
+import { createWsRankSubscription } from '../../../services/ws';
 import { rankToDashboard } from '../../../utils/dashboard';
 import { showError, showSuccess } from '../../../utils/message';
 import './index.scss';
 
 export default function HostDashboardPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsCleanupRef = useRef<null | (() => void)>(null);
   const slotId = getCurrentInstance().router?.params?.slotId || '';
   const [dashboard, setDashboard] = useState<HostDashboardVO | null>(null);
   const [manualUserId, setManualUserId] = useState('');
   const [transferTargetId, setTransferTargetId] = useState('');
+  const [wsConnected, setWsConnected] = useState(false);
   const currentUser = getCurrentUser<{ nickname?: string; id?: string }>();
 
   const loadDashboard = async () => {
@@ -27,18 +30,39 @@ export default function HostDashboardPage() {
 
   useDidShow(() => {
     if (!slotId) return;
-    requireLogin(`/pages/host/dashboard/index?slotId=${slotId}`).then((user) => {
+    requireLogin(`/pages/host/dashboard/index?slotId=${slotId}`).then(async (user) => {
       if (!user) return;
-      loadDashboard();
+
+      try {
+        const data = await sdk.slots.hostDashboard(slotId);
+        setDashboard(data);
+
+        wsCleanupRef.current?.();
+        wsCleanupRef.current = createWsRankSubscription({
+          slotId,
+          roomId: data.room.id,
+          onConnected: () => setWsConnected(true),
+          onDisconnected: () => setWsConnected(false),
+          onRankUpdated: (rank) => {
+            setDashboard(rankToDashboard(rank));
+          },
+        });
+      } catch (error) {
+        showError(error);
+      }
+
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         loadDashboard();
-      }, 5000);
+      }, 15000);
     });
   });
 
   useUnload(() => {
     if (timerRef.current) clearInterval(timerRef.current);
+    wsCleanupRef.current?.();
+    wsCleanupRef.current = null;
+    setWsConnected(false);
   });
 
   const firstEntryId = dashboard?.entries[0]?.id;
@@ -134,6 +158,7 @@ export default function HostDashboardPage() {
         <View className='subtitle'>{dashboard.room.name}</View>
         <View className='subtitle'>当前状态：{dashboard.summary.state}</View>
         <View className='subtitle'>总人数：{dashboard.summary.totalEntries}</View>
+        <View className='subtitle'>实时刷新：{wsConnected ? 'WebSocket 已连接' : '轮询兜底中'}</View>
       </View>
 
       <View className='card'>

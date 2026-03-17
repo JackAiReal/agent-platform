@@ -1,4 +1,5 @@
 import {
+  ConnectedSocket,
   MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -20,13 +21,19 @@ export class WsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleDisconnect(_client: Socket) {}
 
   @SubscribeMessage('room:subscribe')
-  handleRoomSubscribe(client: Socket, @MessageBody() payload: { roomId: string }) {
+  handleRoomSubscribe(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { roomId: string },
+  ) {
     client.join(`room:${payload.roomId}`);
     client.emit('subscribed', { roomId: payload.roomId });
   }
 
   @SubscribeMessage('slot:subscribe')
-  handleSlotSubscribe(client: Socket, @MessageBody() payload: { slotId: string }) {
+  handleSlotSubscribe(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { slotId: string },
+  ) {
     client.join(`slot:${payload.slotId}`);
     client.emit('subscribed', { slotId: payload.slotId });
   }

@@ -4,14 +4,17 @@ import { useMemo, useRef, useState } from 'react';
 import type { RankResponseVO, RoomDetailVO, UserVO } from '@maixu/frontend-sdk';
 import { requireLogin } from '../../../services/auth';
 import { getCurrentUser, sdk } from '../../../services/sdk';
+import { createWsRankSubscription } from '../../../services/ws';
 import { showError, showSuccess } from '../../../utils/message';
 import './index.scss';
 
 export default function RoomDetailPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsCleanupRef = useRef<null | (() => void)>(null);
   const roomId = getCurrentInstance().router?.params?.roomId || '';
   const [room, setRoom] = useState<RoomDetailVO | null>(null);
   const [rank, setRank] = useState<RankResponseVO | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
   const currentUser = useMemo(() => getCurrentUser<UserVO>(), []);
 
   const myEntry = useMemo(
@@ -32,18 +35,40 @@ export default function RoomDetailPage() {
 
   useDidShow(() => {
     if (!roomId) return;
-    requireLogin(`/pages/rooms/detail/index?roomId=${roomId}`).then((user) => {
+    requireLogin(`/pages/rooms/detail/index?roomId=${roomId}`).then(async (user) => {
       if (!user) return;
-      loadData();
+      try {
+        const roomDetail = await sdk.rooms.detail(roomId);
+        setRoom(roomDetail);
+        const rankData = await sdk.slots.rank(roomDetail.currentSlot.id);
+        setRank(rankData);
+
+        wsCleanupRef.current?.();
+        wsCleanupRef.current = createWsRankSubscription({
+          slotId: roomDetail.currentSlot.id,
+          roomId: roomDetail.id,
+          onConnected: () => setWsConnected(true),
+          onDisconnected: () => setWsConnected(false),
+          onRankUpdated: (nextRank) => {
+            setRank(nextRank);
+          },
+        });
+      } catch (error) {
+        showError(error);
+      }
+
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         loadData();
-      }, 5000);
+      }, 15000);
     });
   });
 
   useUnload(() => {
     if (timerRef.current) clearInterval(timerRef.current);
+    wsCleanupRef.current?.();
+    wsCleanupRef.current = null;
+    setWsConnected(false);
   });
 
   const ensureChallengeTicket = async () => {
@@ -139,6 +164,7 @@ export default function RoomDetailPage() {
         <View className='subtitle'>状态：{rank?.slot.state || room.currentSlot.state}</View>
         <View className='subtitle'>当前用户：{currentUser?.nickname || '未登录'}</View>
         <View className='subtitle'>挑战验证：{room.config.enableChallenge ? '开启' : '关闭'}</View>
+        <View className='subtitle'>实时刷新：{wsConnected ? 'WebSocket 已连接' : '轮询兜底中'}</View>
         <View className='btn-row' style={{ marginTop: '16px' }}>
           <Button onClick={() => Taro.navigateTo({ url: `/pages/host/dashboard/index?slotId=${room.currentSlot.id}` })}>
             打开主持台

@@ -6,9 +6,11 @@
 
 - NestJS 后端骨架与主链路接口（Auth / Rooms / Slots / Rank）
 - 主持端控制接口（dashboard / 作废 / 转麦 / 重置 / 截手速 / 补排开关）
+- Challenge 验证链路（发题 / 验证 / ticket 后置加榜）
 - Prisma schema + 初始 migration + seed
 - Taro 前端页面骨架（登录 / 房间列表 / 房间详情 / 主持台）
 - TypeScript Frontend SDK（fetch + taro transport）
+- WebSocket 实时刷新（房间详情页、主持台收到 `rank.updated` 即时更新）
 
 ---
 
@@ -82,9 +84,29 @@ npm run smoke:challenge
 ✅ Challenge smoke passed
 ```
 
+### 7) 跑 WebSocket 实时刷新 smoke test
+
+```bash
+npm run smoke:ws
+```
+
+通过后会输出：
+
+```text
+✅ WS smoke passed
+```
+
 ---
 
 ## 前端快速联调
+
+可选先配置前端环境变量：
+
+```bash
+cp apps/client/.env.example apps/client/.env
+```
+
+然后启动：
 
 ```bash
 npm run dev:client:h5
@@ -113,3 +135,4 @@ npm run dev:client:weapp
 - `npm run dev:client:h5` / `npm run dev:client:weapp`
 - `npm run smoke:db`：数据库模式主链路冒烟
 - `npm run smoke:challenge`：challenge 验证 + ticket 加榜冒烟
+- `npm run smoke:ws`：WebSocket 实时 rank.updated 冒烟

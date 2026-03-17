@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { SlotState } from '@prisma/client';
+import { WsGateway } from '../../infrastructure/ws/ws.gateway';
 import { RankRepository } from '../rank/repositories/rank.repository';
 import { RoomsRepository } from '../rooms/repositories/rooms.repository';
 import { SlotsRepository } from './repositories/slots.repository';
@@ -10,6 +11,7 @@ export class SlotsService {
     private readonly slotsRepository: SlotsRepository,
     private readonly roomsRepository: RoomsRepository,
     private readonly rankRepository: RankRepository,
+    private readonly wsGateway: WsGateway,
   ) {}
 
   getHealth() {
@@ -50,6 +52,7 @@ export class SlotsService {
 
   async closeSpeedStage(slotId: string) {
     const slot = await this.slotsRepository.updateSlotState(slotId, SlotState.FINAL_OPEN);
+    await this.emitRankUpdated(slotId);
     return {
       slotId,
       action: 'closeSpeedStage',
@@ -59,6 +62,7 @@ export class SlotsService {
 
   async closeFinalStage(slotId: string) {
     const slot = await this.slotsRepository.updateSlotState(slotId, SlotState.FINAL_CLOSED);
+    await this.emitRankUpdated(slotId);
     return {
       slotId,
       action: 'closeFinalStage',
@@ -68,11 +72,19 @@ export class SlotsService {
 
   async toggleAddStage(slotId: string, enabled: boolean) {
     const slot = await this.slotsRepository.updateSlotState(slotId, enabled ? SlotState.FINAL_OPEN : SlotState.FINAL_CLOSED);
+    await this.emitRankUpdated(slotId);
     return {
       slotId,
       action: 'toggleAddStage',
       enabled,
       slot,
     };
+  }
+
+  private async emitRankUpdated(slotId: string) {
+    const slot = await this.slotsRepository.getSlot(slotId);
+    const rank = await this.rankRepository.getRank(slotId);
+    this.wsGateway.emitToRoom(slot.roomId, 'rank.updated', rank);
+    this.wsGateway.emitToSlot(slotId, 'rank.updated', rank);
   }
 }

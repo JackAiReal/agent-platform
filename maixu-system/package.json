@@ -22,6 +22,7 @@
     "prisma:seed": "npm --workspace @maixu/server run prisma:seed",
     "prisma:deploy": "npm --workspace @maixu/server run prisma:deploy",
     "smoke:db": "node scripts/smoke-db-flow.mjs",
-    "smoke:challenge": "node scripts/smoke-challenge-flow.mjs"
+    "smoke:challenge": "node scripts/smoke-challenge-flow.mjs",
+    "smoke:ws": "node scripts/smoke-ws-flow.mjs"
   }
 }
