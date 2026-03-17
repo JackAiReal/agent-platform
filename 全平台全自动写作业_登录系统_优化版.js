@@ -4041,6 +4041,7 @@ function 加载自动化模块(appName) {
 
     let factory = new Function("shared", source + "\nreturn typeof createAutomationAdapter === 'function' ? createAutomationAdapter(shared) : null;");
     let adapter = factory(创建自动化共享对象());
+    source = "";
     if (!adapter || typeof adapter.executeTask != "function") {
         throw new Error("云端自动化模块格式错误: " + appName);
     }
