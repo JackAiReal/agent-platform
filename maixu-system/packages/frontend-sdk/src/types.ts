@@ -213,6 +213,50 @@ export interface ChallengeVerifyResponse {
   expiresAt?: string;
 }
 
+export interface LeaveNoticeVO {
+  id: string;
+  roomSlotId: string;
+  userId: string;
+  user?: UserVO;
+  status: 'ACTIVE' | 'RETURNED' | 'EXPIRED' | 'CANCELLED' | string;
+  startAt: string;
+  returnDeadline: string;
+  returnedAt?: string;
+  remindCount: number;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeaveNoticeSnapshotVO {
+  slotId: string;
+  activeNotices: LeaveNoticeVO[];
+  allNotices: LeaveNoticeVO[];
+  updatedAt: string;
+}
+
+export interface LeaveNoticeMyVO {
+  slotId: string;
+  notice: LeaveNoticeVO | null;
+}
+
+export interface LeaveNoticeReportPayload {
+  minutes?: number;
+  reason?: string;
+}
+
+export interface LeaveNoticeReportResponse {
+  slotId: string;
+  notice: LeaveNoticeVO;
+  snapshot: LeaveNoticeSnapshotVO;
+}
+
+export interface LeaveNoticeReturnResponse {
+  slotId: string;
+  notice: LeaveNoticeVO;
+  snapshot: LeaveNoticeSnapshotVO;
+}
+
 export interface ApiErrorPayload {
   message?: string | string[];
   error?: string;

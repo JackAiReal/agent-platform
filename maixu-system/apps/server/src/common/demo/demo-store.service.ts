@@ -60,6 +60,22 @@ type DemoRoomRole = {
   roleCode: RoleCode;
 };
 
+type DemoLeaveNoticeStatus = 'ACTIVE' | 'RETURNED' | 'EXPIRED' | 'CANCELLED';
+
+type DemoLeaveNotice = {
+  id: string;
+  roomSlotId: string;
+  userId: string;
+  status: DemoLeaveNoticeStatus;
+  startAt: string;
+  returnDeadline: string;
+  returnedAt?: string;
+  remindCount: number;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
 @Injectable()
 export class DemoStoreService {
   private readonly users: DemoUser[] = [];
@@ -67,6 +83,7 @@ export class DemoStoreService {
   private readonly slots: DemoSlot[] = [];
   private readonly rankEntries: DemoRankEntry[] = [];
   private readonly roomRoles: DemoRoomRole[] = [];
+  private readonly leaveNotices: DemoLeaveNotice[] = [];
 
   constructor() {
     this.seed();
@@ -447,6 +464,118 @@ export class DemoStoreService {
     return this.roomRoles.some(
       (item) => item.userId === userId && item.roomId === roomId && allowedRoles.includes(item.roleCode),
     );
+  }
+
+  listLeaveNotices(slotId: string) {
+    this.expireLeaveNotices(slotId);
+
+    const notices = this.leaveNotices
+      .filter((item) => item.roomSlotId === slotId)
+      .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime())
+      .map((item) => ({
+        ...item,
+        user: this.getUserById(item.userId),
+      }));
+
+    return {
+      slotId,
+      activeNotices: notices.filter((item) => item.status === 'ACTIVE'),
+      allNotices: notices.slice(0, 20),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  getMyActiveLeaveNotice(slotId: string, userId: string) {
+    this.expireLeaveNotices(slotId);
+
+    const notice = this.leaveNotices
+      .filter((item) => item.roomSlotId === slotId && item.userId === userId && item.status === 'ACTIVE')
+      .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime())[0];
+
+    return notice
+      ? {
+          ...notice,
+          user: this.getUserById(userId),
+        }
+      : null;
+  }
+
+  reportLeaveNotice(payload: { slotId: string; userId: string; returnDeadline: Date; reason?: string }) {
+    this.expireLeaveNotices(payload.slotId);
+
+    const existing = this.leaveNotices
+      .filter((item) => item.roomSlotId === payload.slotId && item.userId === payload.userId && item.status === 'ACTIVE')
+      .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime())[0];
+
+    const now = new Date().toISOString();
+
+    if (existing) {
+      existing.returnDeadline = payload.returnDeadline.toISOString();
+      existing.metadata = {
+        ...(existing.metadata || {}),
+        ...(payload.reason ? { reason: payload.reason } : {}),
+      };
+      existing.updatedAt = now;
+
+      return {
+        ...existing,
+        user: this.getUserById(payload.userId),
+      };
+    }
+
+    const notice: DemoLeaveNotice = {
+      id: randomUUID(),
+      roomSlotId: payload.slotId,
+      userId: payload.userId,
+      status: 'ACTIVE',
+      startAt: now,
+      returnDeadline: payload.returnDeadline.toISOString(),
+      remindCount: 0,
+      metadata: payload.reason ? { reason: payload.reason } : undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.leaveNotices.push(notice);
+
+    return {
+      ...notice,
+      user: this.getUserById(payload.userId),
+    };
+  }
+
+  returnLeaveNotice(payload: { slotId: string; userId: string }) {
+    this.expireLeaveNotices(payload.slotId);
+
+    const existing = this.leaveNotices
+      .filter((item) => item.roomSlotId === payload.slotId && item.userId === payload.userId && item.status === 'ACTIVE')
+      .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime())[0];
+
+    if (!existing) {
+      throw new NotFoundException('active leave notice not found');
+    }
+
+    existing.status = 'RETURNED';
+    existing.returnedAt = new Date().toISOString();
+    existing.updatedAt = existing.returnedAt;
+
+    return {
+      ...existing,
+      user: this.getUserById(payload.userId),
+    };
+  }
+
+  private expireLeaveNotices(slotId: string) {
+    const now = Date.now();
+
+    for (const notice of this.leaveNotices) {
+      if (notice.roomSlotId !== slotId) continue;
+      if (notice.status !== 'ACTIVE') continue;
+      if (new Date(notice.returnDeadline).getTime() <= now) {
+        notice.status = 'EXPIRED';
+        notice.updatedAt = new Date().toISOString();
+      }
+    }
   }
 
   private findUserRank(slotId: string, userId: string) {

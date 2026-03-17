@@ -1,7 +1,7 @@
 import { Button, Input, Text, View } from '@tarojs/components';
 import Taro, { getCurrentInstance, useDidShow, useUnload } from '@tarojs/taro';
 import { useRef, useState } from 'react';
-import type { HostDashboardVO } from '@maixu/frontend-sdk';
+import type { HostDashboardVO, LeaveNoticeSnapshotVO } from '@maixu/frontend-sdk';
 import { buildUserLabel, requireLogin } from '../../../services/auth';
 import { getCurrentUser, sdk } from '../../../services/sdk';
 import { createWsRankSubscription } from '../../../services/ws';
@@ -14,6 +14,7 @@ export default function HostDashboardPage() {
   const wsCleanupRef = useRef<null | (() => void)>(null);
   const slotId = getCurrentInstance().router?.params?.slotId || '';
   const [dashboard, setDashboard] = useState<HostDashboardVO | null>(null);
+  const [leaveSnapshot, setLeaveSnapshot] = useState<LeaveNoticeSnapshotVO | null>(null);
   const [manualUserId, setManualUserId] = useState('');
   const [transferTargetId, setTransferTargetId] = useState('');
   const [wsConnected, setWsConnected] = useState(false);
@@ -23,6 +24,8 @@ export default function HostDashboardPage() {
     try {
       const data = await sdk.slots.hostDashboard(slotId);
       setDashboard(data);
+      const leaveData = await sdk.leaveNotices.list(slotId);
+      setLeaveSnapshot(leaveData);
     } catch (error) {
       showError(error);
     }
@@ -36,6 +39,8 @@ export default function HostDashboardPage() {
       try {
         const data = await sdk.slots.hostDashboard(slotId);
         setDashboard(data);
+        const leaveData = await sdk.leaveNotices.list(slotId);
+        setLeaveSnapshot(leaveData);
 
         wsCleanupRef.current?.();
         wsCleanupRef.current = createWsRankSubscription({
@@ -45,6 +50,9 @@ export default function HostDashboardPage() {
           onDisconnected: () => setWsConnected(false),
           onRankUpdated: (rank) => {
             setDashboard(rankToDashboard(rank));
+          },
+          onLeaveNoticeUpdated: (snapshot) => {
+            setLeaveSnapshot(snapshot);
           },
         });
       } catch (error) {
@@ -170,6 +178,21 @@ export default function HostDashboardPage() {
           <Button onClick={() => handleToggleAdd(false)}>关闭补排</Button>
           <Button className='danger-btn' onClick={handleReset}>重置本档</Button>
         </View>
+      </View>
+
+      <View className='card'>
+        <View className='title'>暂离报备监控</View>
+        <View className='subtitle'>当前暂离人数：{leaveSnapshot?.activeNotices.length || 0}</View>
+        {(leaveSnapshot?.activeNotices || []).length === 0 ? (
+          <View className='subtitle'>暂无暂离报备</View>
+        ) : (
+          (leaveSnapshot?.activeNotices || []).map((item) => (
+            <View className='leave-row' key={item.id}>
+              <View>{item.user?.nickname || item.userId}</View>
+              <View className='subtitle'>最晚回厅：{new Date(item.returnDeadline).toLocaleTimeString()}</View>
+            </View>
+          ))
+        )}
       </View>
 
       <View className='card'>

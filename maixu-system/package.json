@@ -23,6 +23,7 @@
     "prisma:deploy": "npm --workspace @maixu/server run prisma:deploy",
     "smoke:db": "node scripts/smoke-db-flow.mjs",
     "smoke:challenge": "node scripts/smoke-challenge-flow.mjs",
-    "smoke:ws": "node scripts/smoke-ws-flow.mjs"
+    "smoke:ws": "node scripts/smoke-ws-flow.mjs",
+    "smoke:leave": "node scripts/smoke-leave-notice-flow.mjs"
   }
 }

@@ -1,7 +1,7 @@
 import { Button, Text, View } from '@tarojs/components';
 import Taro, { getCurrentInstance, useDidShow, useUnload } from '@tarojs/taro';
 import { useMemo, useRef, useState } from 'react';
-import type { RankResponseVO, RoomDetailVO, UserVO } from '@maixu/frontend-sdk';
+import type { LeaveNoticeSnapshotVO, RankResponseVO, RoomDetailVO, UserVO } from '@maixu/frontend-sdk';
 import { requireLogin } from '../../../services/auth';
 import { getCurrentUser, sdk } from '../../../services/sdk';
 import { createWsRankSubscription } from '../../../services/ws';
@@ -14,6 +14,7 @@ export default function RoomDetailPage() {
   const roomId = getCurrentInstance().router?.params?.roomId || '';
   const [room, setRoom] = useState<RoomDetailVO | null>(null);
   const [rank, setRank] = useState<RankResponseVO | null>(null);
+  const [leaveSnapshot, setLeaveSnapshot] = useState<LeaveNoticeSnapshotVO | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
   const currentUser = useMemo(() => getCurrentUser<UserVO>(), []);
 
@@ -22,12 +23,19 @@ export default function RoomDetailPage() {
     [rank, currentUser?.id],
   );
 
+  const myLeaveNotice = useMemo(
+    () => leaveSnapshot?.activeNotices.find((item) => item.userId === currentUser?.id) ?? null,
+    [leaveSnapshot, currentUser?.id],
+  );
+
   const loadData = async () => {
     try {
       const roomDetail = await sdk.rooms.detail(roomId);
       setRoom(roomDetail);
       const rankData = await sdk.slots.rank(roomDetail.currentSlot.id);
       setRank(rankData);
+      const leaveData = await sdk.leaveNotices.list(roomDetail.currentSlot.id);
+      setLeaveSnapshot(leaveData);
     } catch (error) {
       showError(error);
     }
@@ -42,6 +50,8 @@ export default function RoomDetailPage() {
         setRoom(roomDetail);
         const rankData = await sdk.slots.rank(roomDetail.currentSlot.id);
         setRank(rankData);
+        const leaveData = await sdk.leaveNotices.list(roomDetail.currentSlot.id);
+        setLeaveSnapshot(leaveData);
 
         wsCleanupRef.current?.();
         wsCleanupRef.current = createWsRankSubscription({
@@ -51,6 +61,9 @@ export default function RoomDetailPage() {
           onDisconnected: () => setWsConnected(false),
           onRankUpdated: (nextRank) => {
             setRank(nextRank);
+          },
+          onLeaveNoticeUpdated: (snapshot) => {
+            setLeaveSnapshot(snapshot);
           },
         });
       } catch (error) {
@@ -151,6 +164,32 @@ export default function RoomDetailPage() {
     }
   };
 
+  const handleLeaveReport = async (minutes: number) => {
+    if (!room) return;
+
+    try {
+      const result = await sdk.leaveNotices.report(room.currentSlot.id, {
+        minutes,
+      });
+      setLeaveSnapshot(result.snapshot);
+      showSuccess(`已报备暂离 ${minutes} 分钟`);
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  const handleLeaveReturn = async () => {
+    if (!room) return;
+
+    try {
+      const result = await sdk.leaveNotices.returnFromLeave(room.currentSlot.id);
+      setLeaveSnapshot(result.snapshot);
+      showSuccess('已标记回厅');
+    } catch (error) {
+      showError(error);
+    }
+  };
+
   if (!room) {
     return <View className='container'>加载中...</View>;
   }
@@ -192,6 +231,28 @@ export default function RoomDetailPage() {
               <Button className='primary-btn' onClick={() => handleJoin('手速', 0)}>手速</Button>
               <Button className='success-btn' onClick={() => handleJoin('任务A', 20)}>任务A</Button>
               <Button onClick={() => handleJoin('任务B', 30)}>任务B</Button>
+            </View>
+          </>
+        )}
+      </View>
+
+      <View className='card'>
+        <View className='title'>暂离报备</View>
+        <View className='subtitle'>当前暂离人数：{leaveSnapshot?.activeNotices.length || 0}</View>
+        {myLeaveNotice ? (
+          <>
+            <View className='subtitle'>你已报备暂离</View>
+            <View className='subtitle'>最晚回厅：{new Date(myLeaveNotice.returnDeadline).toLocaleTimeString()}</View>
+            <View className='btn-row'>
+              <Button className='success-btn' onClick={handleLeaveReturn}>我已回厅</Button>
+            </View>
+          </>
+        ) : (
+          <>
+            <View className='subtitle'>如需短暂离开可先报备，避免主持误判掉麦。</View>
+            <View className='btn-row'>
+              <Button onClick={() => handleLeaveReport(5)}>报备 5 分钟</Button>
+              <Button onClick={() => handleLeaveReport(10)}>报备 10 分钟</Button>
             </View>
           </>
         )}

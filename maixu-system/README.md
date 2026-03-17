@@ -7,10 +7,11 @@
 - NestJS 后端骨架与主链路接口（Auth / Rooms / Slots / Rank）
 - 主持端控制接口（dashboard / 作废 / 转麦 / 重置 / 截手速 / 补排开关）
 - Challenge 验证链路（发题 / 验证 / ticket 后置加榜）
+- Leave Notice 报备闭环（用户报备/回厅、主持查看、WebSocket 状态同步）
 - Prisma schema + 初始 migration + seed
 - Taro 前端页面骨架（登录 / 房间列表 / 房间详情 / 主持台）
 - TypeScript Frontend SDK（fetch + taro transport）
-- WebSocket 实时刷新（房间详情页、主持台收到 `rank.updated` 即时更新）
+- WebSocket 实时刷新（房间详情页、主持台收到 `rank.updated` 与 `leave-notice.updated` 即时更新）
 
 ---
 
@@ -96,6 +97,18 @@ npm run smoke:ws
 ✅ WS smoke passed
 ```
 
+### 8) 跑 Leave Notice 报备闭环 smoke test
+
+```bash
+npm run smoke:leave
+```
+
+通过后会输出：
+
+```text
+✅ Leave notice smoke passed
+```
+
 ---
 
 ## 前端快速联调
@@ -136,3 +149,4 @@ npm run dev:client:weapp
 - `npm run smoke:db`：数据库模式主链路冒烟
 - `npm run smoke:challenge`：challenge 验证 + ticket 加榜冒烟
 - `npm run smoke:ws`：WebSocket 实时 rank.updated 冒烟
+- `npm run smoke:leave`：Leave Notice 报备闭环冒烟
