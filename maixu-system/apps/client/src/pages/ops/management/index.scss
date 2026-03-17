@@ -14,6 +14,23 @@
   background: #f3f4f6;
   border-radius: 12px;
   box-sizing: border-box;
+  margin-bottom: 8px;
+}
+
+.tab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tab-btn {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.tab-btn.active {
+  background: #2563eb;
+  color: #fff;
 }
 
 .list-item {
@@ -21,6 +38,13 @@
   padding: 12px;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
+}
+
+.pagination-row {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .mono {
