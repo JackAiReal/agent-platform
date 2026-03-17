@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { SlotState } from '@prisma/client';
 import { WsGateway } from '../../../infrastructure/ws/ws.gateway';
+import { AuditService } from '../../audit/audit.service';
 import { ChallengesService } from '../../challenges/challenges.service';
 import { SlotsRepository } from '../../slots/repositories/slots.repository';
 import { RankRepository } from '../repositories/rank.repository';
@@ -13,6 +14,7 @@ export class RankCommandService {
     private readonly rankRepository: RankRepository,
     private readonly slotsRepository: SlotsRepository,
     private readonly challengesService: ChallengesService,
+    private readonly auditService: AuditService,
     private readonly wsGateway: WsGateway,
   ) {}
 
@@ -48,7 +50,11 @@ export class RankCommandService {
     return this.emitRankChanged(slotId, result);
   }
 
-  async manualAdd(slotId: string, payload: { userId: string; sourceContent: string; score: number }) {
+  async manualAdd(
+    slotId: string,
+    payload: { userId: string; sourceContent: string; score: number },
+    operatorUserId?: string,
+  ) {
     const result = await this.rankRepository.joinRank({
       slotId,
       userId: payload.userId,
@@ -57,27 +63,63 @@ export class RankCommandService {
       sourceType: 'MANUAL',
     });
 
+    await this.logHostAction(slotId, operatorUserId, 'rank.manual_add', payload.userId, {
+      sourceContent: payload.sourceContent,
+      score: payload.score,
+    });
+
     return this.emitRankChanged(slotId, {
       mode: 'manual',
       ...result,
     });
   }
 
-  async invalidateEntry(slotId: string, payload: { entryId: string }) {
+  async invalidateEntry(slotId: string, payload: { entryId: string }, operatorUserId?: string) {
     const result = await this.rankRepository.invalidateEntry(slotId, payload.entryId);
+
+    await this.logHostAction(slotId, operatorUserId, 'rank.invalidate_entry', payload.entryId);
+
     return this.emitRankChanged(slotId, result);
   }
 
-  async transferEntry(slotId: string, payload: { entryId: string; toUserId: string }) {
+  async transferEntry(slotId: string, payload: { entryId: string; toUserId: string }, operatorUserId?: string) {
     const result = await this.rankRepository.transferEntry(slotId, payload);
+
+    await this.logHostAction(slotId, operatorUserId, 'rank.transfer_entry', payload.entryId, {
+      toUserId: payload.toUserId,
+    });
+
     return this.emitRankChanged(slotId, result);
   }
 
-  async resetSlot(slotId: string) {
+  async resetSlot(slotId: string, operatorUserId?: string) {
     const result = await this.rankRepository.resetSlotRank(slotId);
     await this.slotsRepository.updateSlotIsFull(slotId, false);
     await this.slotsRepository.updateSlotState(slotId, SlotState.OPEN);
+
+    await this.logHostAction(slotId, operatorUserId, 'rank.reset_slot', slotId);
+
     return this.emitRankChanged(slotId, result, true);
+  }
+
+  private async logHostAction(
+    slotId: string,
+    operatorUserId: string | undefined,
+    action: string,
+    targetId?: string,
+    payload?: Record<string, unknown>,
+  ) {
+    const slot = await this.slotsRepository.getSlot(slotId);
+
+    await this.auditService.log({
+      roomId: slot.roomId,
+      roomSlotId: slotId,
+      operatorUserId,
+      action,
+      targetType: 'rank',
+      targetId,
+      payload,
+    });
   }
 
   private async buildRejectedJoinResult(

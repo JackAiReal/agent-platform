@@ -1,5 +1,6 @@
 import { RoleCode } from '@prisma/client';
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { SlotRoleGuard } from '../../common/auth/slot-role.guard';
 import { SlotRoles } from '../../common/auth/slot-roles.decorator';
@@ -41,28 +42,40 @@ export class RankController {
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post('slots/:slotId/manual-add')
-  manualAdd(@Param('slotId') slotId: string, @Body() body: { userId: string; sourceContent: string; score: number }) {
-    return this.rankCommandService.manualAdd(slotId, body);
+  manualAdd(
+    @Param('slotId') slotId: string,
+    @CurrentUser() user: { sub: string },
+    @Body() body: { userId: string; sourceContent: string; score: number },
+  ) {
+    return this.rankCommandService.manualAdd(slotId, body, user.sub);
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post('slots/:slotId/invalidate-entry')
-  invalidateEntry(@Param('slotId') slotId: string, @Body() body: { entryId: string }) {
-    return this.rankCommandService.invalidateEntry(slotId, body);
+  invalidateEntry(
+    @Param('slotId') slotId: string,
+    @CurrentUser() user: { sub: string },
+    @Body() body: { entryId: string },
+  ) {
+    return this.rankCommandService.invalidateEntry(slotId, body, user.sub);
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post('slots/:slotId/transfer-entry')
-  transferEntry(@Param('slotId') slotId: string, @Body() body: { entryId: string; toUserId: string }) {
-    return this.rankCommandService.transferEntry(slotId, body);
+  transferEntry(
+    @Param('slotId') slotId: string,
+    @CurrentUser() user: { sub: string },
+    @Body() body: { entryId: string; toUserId: string },
+  ) {
+    return this.rankCommandService.transferEntry(slotId, body, user.sub);
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post('slots/:slotId/reset-slot')
-  resetSlot(@Param('slotId') slotId: string) {
-    return this.rankCommandService.resetSlot(slotId);
+  resetSlot(@Param('slotId') slotId: string, @CurrentUser() user: { sub: string }) {
+    return this.rankCommandService.resetSlot(slotId, user.sub);
   }
 }

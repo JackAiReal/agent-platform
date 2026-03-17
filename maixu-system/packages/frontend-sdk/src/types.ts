@@ -257,6 +257,95 @@ export interface LeaveNoticeReturnResponse {
   snapshot: LeaveNoticeSnapshotVO;
 }
 
+export interface RoomConfigSnapshotVO {
+  roomId: string;
+  roomCode: string;
+  configs: Record<string, unknown>;
+}
+
+export interface RoomConfigUpdatePayload {
+  configs: Record<string, unknown>;
+}
+
+export interface HostScheduleVO {
+  id: string;
+  roomId: string;
+  weekday: number;
+  startHour: number;
+  endHour: number;
+  hostUserId: string;
+  priority: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  hostUser?: UserVO;
+}
+
+export interface HostScheduleCreatePayload {
+  weekday: number;
+  startHour: number;
+  endHour: number;
+  hostUserId: string;
+  priority?: number;
+  isActive?: boolean;
+}
+
+export interface HostOverrideVO {
+  id: string;
+  roomId: string;
+  slotDate: string;
+  slotHour: number;
+  hostUserId: string;
+  oneTimeOnly: boolean;
+  remark?: string;
+  createdById?: string;
+  createdAt: string;
+  hostUser?: UserVO;
+}
+
+export interface HostOverrideCreatePayload {
+  slotDate: string;
+  slotHour: number;
+  hostUserId: string;
+  oneTimeOnly?: boolean;
+  remark?: string;
+}
+
+export interface HostResolveVO {
+  roomId: string;
+  slotDate: string;
+  slotHour: number;
+  source: 'override' | 'schedule' | 'none' | 'fallback';
+  hostUserId?: string | null;
+  hostUser?: UserVO | null;
+  scheduleId?: string;
+  overrideId?: string;
+}
+
+export interface NotificationTimeoutCheckPayload {
+  slotId?: string;
+  dryRun?: boolean;
+  simulateNowOffsetSeconds?: number;
+}
+
+export interface NotificationTimeoutCheckResponse {
+  checkedCount: number;
+  timeoutCount: number;
+  logsCreated: number;
+  dryRun: boolean;
+}
+
+export interface NotificationLogVO {
+  id: string;
+  userId?: string;
+  channel: string;
+  templateCode?: string;
+  payload: Record<string, unknown>;
+  status: string;
+  errorMessage?: string;
+  createdAt: string;
+}
+
 export interface ApiErrorPayload {
   message?: string | string[];
   error?: string;

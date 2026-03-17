@@ -1,5 +1,6 @@
 import { RoleCode } from '@prisma/client';
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { SlotRoleGuard } from '../../common/auth/slot-role.guard';
 import { SlotRoles } from '../../common/auth/slot-roles.decorator';
@@ -41,21 +42,25 @@ export class SlotsController {
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post(':slotId/close-speed-stage')
-  closeSpeedStage(@Param('slotId') slotId: string) {
-    return this.slotsService.closeSpeedStage(slotId);
+  closeSpeedStage(@Param('slotId') slotId: string, @CurrentUser() user: { sub: string }) {
+    return this.slotsService.closeSpeedStage(slotId, user.sub);
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post(':slotId/close-final-stage')
-  closeFinalStage(@Param('slotId') slotId: string) {
-    return this.slotsService.closeFinalStage(slotId);
+  closeFinalStage(@Param('slotId') slotId: string, @CurrentUser() user: { sub: string }) {
+    return this.slotsService.closeFinalStage(slotId, user.sub);
   }
 
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post(':slotId/toggle-add-stage')
-  toggleAddStage(@Param('slotId') slotId: string, @Body() body: { enabled: boolean }) {
-    return this.slotsService.toggleAddStage(slotId, body.enabled);
+  toggleAddStage(
+    @Param('slotId') slotId: string,
+    @CurrentUser() user: { sub: string },
+    @Body() body: { enabled: boolean },
+  ) {
+    return this.slotsService.toggleAddStage(slotId, body.enabled, user.sub);
   }
 }

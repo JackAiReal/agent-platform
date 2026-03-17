@@ -150,7 +150,9 @@ export class LeaveNoticesService {
       where: {
         roomSlotId: slotId,
         userId,
-        status: LeaveNoticeStatus.ACTIVE,
+        status: {
+          in: [LeaveNoticeStatus.ACTIVE, LeaveNoticeStatus.EXPIRED],
+        },
       },
       orderBy: { startAt: 'desc' },
     });

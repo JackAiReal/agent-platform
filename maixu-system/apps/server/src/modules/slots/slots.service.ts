@@ -3,6 +3,7 @@ import { SlotState } from '@prisma/client';
 import { DemoStoreService } from '../../common/demo/demo-store.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { WsGateway } from '../../infrastructure/ws/ws.gateway';
+import { AuditService } from '../audit/audit.service';
 import { RankRepository } from '../rank/repositories/rank.repository';
 import { RoomsRepository } from '../rooms/repositories/rooms.repository';
 import { SlotsRepository } from './repositories/slots.repository';
@@ -15,6 +16,7 @@ export class SlotsService {
     private readonly rankRepository: RankRepository,
     private readonly demoStoreService: DemoStoreService,
     private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
     private readonly wsGateway: WsGateway,
   ) {}
 
@@ -84,8 +86,9 @@ export class SlotsService {
     }));
   }
 
-  async closeSpeedStage(slotId: string) {
+  async closeSpeedStage(slotId: string, operatorUserId?: string) {
     const slot = await this.slotsRepository.updateSlotState(slotId, SlotState.FINAL_OPEN);
+    await this.logHostAction(slotId, operatorUserId, 'slot.close_speed_stage');
     await this.emitRankUpdated(slotId);
     return {
       slotId,
@@ -94,8 +97,9 @@ export class SlotsService {
     };
   }
 
-  async closeFinalStage(slotId: string) {
+  async closeFinalStage(slotId: string, operatorUserId?: string) {
     const slot = await this.slotsRepository.updateSlotState(slotId, SlotState.FINAL_CLOSED);
+    await this.logHostAction(slotId, operatorUserId, 'slot.close_final_stage');
     await this.emitRankUpdated(slotId);
     return {
       slotId,
@@ -104,8 +108,12 @@ export class SlotsService {
     };
   }
 
-  async toggleAddStage(slotId: string, enabled: boolean) {
+  async toggleAddStage(slotId: string, enabled: boolean, operatorUserId?: string) {
     const slot = await this.slotsRepository.updateSlotState(slotId, enabled ? SlotState.FINAL_OPEN : SlotState.FINAL_CLOSED);
+    await this.logHostAction(slotId, operatorUserId, 'slot.toggle_add_stage', {
+      enabled,
+      nextState: slot.state,
+    });
     await this.emitRankUpdated(slotId);
     return {
       slotId,
@@ -113,6 +121,21 @@ export class SlotsService {
       enabled,
       slot,
     };
+  }
+
+  private async logHostAction(slotId: string, operatorUserId?: string, action?: string, payload?: Record<string, unknown>) {
+    if (!action) return;
+
+    const slot = await this.slotsRepository.getSlot(slotId);
+    await this.auditService.log({
+      roomId: slot.roomId,
+      roomSlotId: slotId,
+      operatorUserId,
+      action,
+      targetType: 'slot',
+      targetId: slotId,
+      payload,
+    });
   }
 
   private async emitRankUpdated(slotId: string) {

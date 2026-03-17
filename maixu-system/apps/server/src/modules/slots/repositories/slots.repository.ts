@@ -34,6 +34,7 @@ export class SlotsRepository {
 
     const config = buildRuntimeRoomConfig(room.configs);
     const { startAt, speedCloseAt, finalCloseAt } = buildSlotTimes(slotDate, slotHour, config);
+    const hostUserId = await this.resolveHostUserId(room.id, slotDate, slotHour);
 
     return this.prisma.roomSlot.upsert({
       where: {
@@ -43,7 +44,9 @@ export class SlotsRepository {
           slotHour,
         },
       },
-      update: {},
+      update: {
+        ...(hostUserId ? { hostUserId } : {}),
+      },
       create: {
         roomId: room.id,
         slotDate,
@@ -53,6 +56,7 @@ export class SlotsRepository {
         finalCloseAt,
         state: SlotState.OPEN,
         isFull: false,
+        ...(hostUserId ? { hostUserId } : {}),
       },
     });
   }
@@ -93,5 +97,39 @@ export class SlotsRepository {
       where: { id: slotId },
       data: { state },
     });
+  }
+
+  private async resolveHostUserId(roomId: string, slotDate: Date, slotHour: number) {
+    const override = await this.prisma.roomHostOverride.findFirst({
+      where: {
+        roomId,
+        slotDate,
+        slotHour,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (override) {
+      return override.hostUserId;
+    }
+
+    const weekday = slotDate.getDay();
+
+    const schedule = await this.prisma.roomHostSchedule.findFirst({
+      where: {
+        roomId,
+        weekday,
+        isActive: true,
+        startHour: {
+          lte: slotHour,
+        },
+        endHour: {
+          gt: slotHour,
+        },
+      },
+      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+    });
+
+    return schedule?.hostUserId;
   }
 }

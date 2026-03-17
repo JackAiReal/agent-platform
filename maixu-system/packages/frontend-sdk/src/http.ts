@@ -111,6 +111,14 @@ export class ApiHttpClient {
     return this.request<T>({ path, method: 'POST', data, auth });
   }
 
+  async put<T>(path: string, data?: unknown, auth = false) {
+    return this.request<T>({ path, method: 'PUT', data, auth });
+  }
+
+  async delete<T>(path: string, auth = false) {
+    return this.request<T>({ path, method: 'DELETE', auth });
+  }
+
   async request<T>(config: ApiRequestConfig): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

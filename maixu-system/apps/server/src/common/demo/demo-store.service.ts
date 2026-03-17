@@ -479,6 +479,43 @@ export class DemoStoreService {
       .sort((a, b) => a.nickname.localeCompare(b.nickname, 'zh-CN'));
   }
 
+  getRoomConfigs(roomId: string) {
+    const room = this.getRoom(roomId);
+    return {
+      max_rank: room.config.maxRank,
+      order_start_minute: room.config.orderStartMinute,
+      order_stop_minute: room.config.orderStopMinute,
+      enable_challenge: room.config.enableChallenge,
+      challenge_ttl_seconds: room.config.challengeTtlSeconds,
+    };
+  }
+
+  updateRoomConfigs(roomId: string, configs: Record<string, unknown>) {
+    const room = this.getRoom(roomId);
+
+    if (configs.max_rank !== undefined) {
+      room.config.maxRank = Number(configs.max_rank);
+    }
+
+    if (configs.order_start_minute !== undefined) {
+      room.config.orderStartMinute = Number(configs.order_start_minute);
+    }
+
+    if (configs.order_stop_minute !== undefined) {
+      room.config.orderStopMinute = Number(configs.order_stop_minute);
+    }
+
+    if (configs.enable_challenge !== undefined) {
+      room.config.enableChallenge = Boolean(configs.enable_challenge);
+    }
+
+    if (configs.challenge_ttl_seconds !== undefined) {
+      room.config.challengeTtlSeconds = Number(configs.challenge_ttl_seconds);
+    }
+
+    return this.getRoomConfigs(roomId);
+  }
+
   listLeaveNotices(slotId: string) {
     this.expireLeaveNotices(slotId);
 

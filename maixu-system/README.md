@@ -8,6 +8,9 @@
 - 主持端控制接口（dashboard / 作废 / 转麦 / 重置 / 截手速 / 补排开关）
 - Challenge 验证链路（发题 / 验证 / ticket 后置加榜）
 - Leave Notice 报备闭环（用户报备/回厅、主持查看、WebSocket 状态同步）
+- Notifications（报备超时检查 + 通知日志）
+- Audit（主持关键操作日志）
+- Room Configs + Host Schedules（配置可运营化）
 - Prisma schema + 初始 migration + seed
 - Taro 前端页面骨架（登录 / 房间列表 / 房间详情 / 主持台）
 - TypeScript Frontend SDK（fetch + taro transport）
@@ -109,6 +112,18 @@ npm run smoke:leave
 ✅ Leave notice smoke passed
 ```
 
+### 9) 跑运营模块（Notifications/Audit/Configs/Schedules）smoke test
+
+```bash
+npm run smoke:ops
+```
+
+通过后会输出：
+
+```text
+✅ Ops smoke passed
+```
+
 ---
 
 ## 前端快速联调
@@ -150,3 +165,4 @@ npm run dev:client:weapp
 - `npm run smoke:challenge`：challenge 验证 + ticket 加榜冒烟
 - `npm run smoke:ws`：WebSocket 实时 rank.updated 冒烟
 - `npm run smoke:leave`：Leave Notice 报备闭环冒烟
+- `npm run smoke:ops`：Notifications + Audit + Room Configs + Host Schedules 冒烟
