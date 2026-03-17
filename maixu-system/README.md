@@ -1,27 +1,94 @@
 # Maixu System
 
-排麦系统工程骨架。
+排麦系统工程骨架（NestJS + Prisma + Taro + Frontend SDK）。
 
 ## 当前内容
 
-- NestJS 后端骨架
-- Prisma schema 第一版
-- Redis / WebSocket / Logger / Prisma 基础设施模块
-- 核心业务模块占位：auth、users、rooms、room-configs、host-schedules、slots、rank、challenges、leave-notices、notifications、audit
+- NestJS 后端骨架与主链路接口（Auth / Rooms / Slots / Rank）
+- 主持端控制接口（dashboard / 作废 / 转麦 / 重置 / 截手速 / 补排开关）
+- Prisma schema + 初始 migration + seed
+- Taro 前端页面骨架（登录 / 房间列表 / 房间详情 / 主持台）
+- TypeScript Frontend SDK（fetch + taro transport）
 
-## 快速开始
+---
+
+## A 路线：切到真实 PostgreSQL 联调
+
+### 1) 启动本地 PostgreSQL + Redis（Docker）
 
 ```bash
 cd maixu-system
-npm install
+npm run db:up
+```
+
+> 默认端口：PostgreSQL `5432`，Redis `6379`
+
+### 2) 配置后端环境变量
+
+```bash
 cp apps/server/.env.example apps/server/.env
+```
+
+`.env.example` 默认值已对应 docker-compose 服务：
+
+- `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/maixu?schema=public`
+- `REDIS_URL=redis://127.0.0.1:6379`
+
+### 3) 初始化数据库
+
+```bash
 npm run prisma:generate
-npm run build:server
+npm run prisma:migrate
+npm run prisma:seed
+```
+
+### 4) 启动后端
+
+```bash
 npm run dev:server
 ```
 
-## 下一步建议
+### 5) 跑一轮数据库联调 smoke test
 
-1. 先实现 Auth / Rooms / Slots / Rank 主链路
-2. 再接 Redis 实时榜单与 WebSocket 推送
-3. 然后补 challenge、leave-notices、notifications
+另开一个终端执行：
+
+```bash
+npm run smoke:db
+```
+
+通过后会输出：
+
+```text
+✅ Smoke test passed: PostgreSQL mode main flow is healthy
+```
+
+---
+
+## 前端快速联调
+
+```bash
+npm run dev:client:h5
+# 或
+npm run dev:client:weapp
+```
+
+登录页提供了 3 个种子账号快捷登录（需要先执行 seed）：
+
+- 演示主持（`seed-host-openid`）
+- 演示用户（`seed-guest-openid`）
+- 系统管理员（`seed-admin-openid`）
+
+也可以输入任意昵称作为普通用户登录。
+
+---
+
+## 常用脚本
+
+- `npm run db:up`：启动 PostgreSQL + Redis
+- `npm run db:down`：停止并移除容器
+- `npm run db:logs`：查看数据库日志
+- `npm run dev:server`：启动后端
+- `npm run build:server`：构建后端
+- `npm run prisma:generate` / `npm run prisma:migrate` / `npm run prisma:seed`
+- `npm run dev:client:h5` / `npm run dev:client:weapp`
+- `npm run smoke:db`：数据库模式主链路冒烟

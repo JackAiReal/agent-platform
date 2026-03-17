@@ -6,6 +6,12 @@ dist
 coverage
 .tmp
 .DS_Store
+apps/server/.env
+apps/server/.env.*
+!apps/server/.env.example
+apps/client/.env
+apps/client/.env.*
+!apps/client/.env.example
 apps/server/node_modules
 apps/server/dist
 apps/server/prisma/dev.db

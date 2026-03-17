@@ -1,7 +1,7 @@
 import Taro from '@tarojs/taro';
 import { createMaixuSdk, createTaroTransport } from '@maixu/frontend-sdk';
 
-const API_BASE_URL = 'http://localhost:3000/api/v1';
+const API_BASE_URL = process.env.TARO_APP_API_BASE_URL || 'http://localhost:3000/api/v1';
 const TOKEN_KEY = 'maixu_access_token';
 const USER_KEY = 'maixu_user_info';
 

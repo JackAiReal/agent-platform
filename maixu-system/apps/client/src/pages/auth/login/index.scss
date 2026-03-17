@@ -10,3 +10,21 @@
   border-radius: 16px;
   box-sizing: border-box;
 }
+
+.quick-login-title {
+  margin-top: 28px;
+  margin-bottom: 12px;
+  font-size: 26px;
+  color: #6b7280;
+}
+
+.quick-login-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quick-login-btn {
+  background: #eef2ff;
+  color: #4338ca;
+}

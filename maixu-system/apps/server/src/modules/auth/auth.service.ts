@@ -87,6 +87,21 @@ export class AuthService {
       });
     }
 
+    const existing = await this.prisma.user.findFirst({
+      where: { nickname: payload.nickname },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (existing) {
+      return this.prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          nickname: payload.nickname,
+          avatarUrl: payload.avatarUrl,
+        },
+      });
+    }
+
     return this.prisma.user.create({
       data: {
         nickname: payload.nickname,
