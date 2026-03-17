@@ -3571,7 +3571,8 @@ function 比较版本号(v1, v2) {
 }
 
 function 模块缓存可用(cacheEntry, latestVersion) {
-    if (!cacheEntry || !cacheEntry.js_plain) return false;
+    if (!cacheEntry) return false;
+    if (!cacheEntry.lease_data || !cacheEntry.client_nonce) return false;
     let now = new Date().getTime();
     let expireAt = parseInt(cacheEntry.cache_expire_at || 0);
     if (expireAt > 0 && now >= expireAt) return false;
@@ -3970,9 +3971,26 @@ function 加载自动化模块(appName) {
     let fromCache = false;
 
     if (模块缓存可用(cacheEntry, latestVersion)) {
-        source = String(cacheEntry.js_plain || "");
-        fromCache = true;
-    } else {
+        try {
+            source = 解密租约模块脚本(cacheEntry.lease_data || {}, moduleToken, String(cacheEntry.client_nonce || ""));
+            let expectedHash = String(cacheEntry.content_sha256 || "").trim().toLowerCase();
+            let actualHash = 字节转十六进制(SHA256字节(字符串转字节(source))).toLowerCase();
+            if (expectedHash && expectedHash != actualHash) {
+                throw new Error("缓存模块哈希校验失败");
+            }
+            fromCache = true;
+        } catch (cacheError) {
+            fromCache = false;
+            source = "";
+            记录自动化日志("automation.module.cache.decrypt.fail", {
+                appName: appName,
+                moduleCode: moduleInfo.module_code,
+                error: String(cacheError)
+            }, "WARN");
+        }
+    }
+
+    if (!fromCache) {
         let clientNonce = 生成随机NonceBase64(16);
         let leaseResp = 请求模块POST(
             "/automation/modules/lease",
@@ -4002,13 +4020,20 @@ function 加载自动化模块(appName) {
             throw new Error("模块哈希校验失败");
         }
 
+        let cacheExpireAt = now + cacheSeconds * 1000;
+        let leaseExpireAt = Date.parse(String(leaseData.expires_at || ""));
+        if (!isNaN(leaseExpireAt) && leaseExpireAt > 0) {
+            cacheExpireAt = Math.min(cacheExpireAt, Math.max(now, leaseExpireAt - 1000));
+        }
+
         保存模块缓存(moduleInfo.module_code, appName, {
             module_name: moduleInfo.module_name,
             module_code: moduleInfo.module_code,
             module_version: leaseData.module_version || latestVersion || "",
-            js_plain: source,
+            lease_data: leaseData,
+            client_nonce: clientNonce,
             lease_expires_at: leaseData.expires_at || "",
-            cache_expire_at: now + cacheSeconds * 1000,
+            cache_expire_at: cacheExpireAt,
             content_sha256: expectedHash || actualHash,
             updated_at: now
         });
