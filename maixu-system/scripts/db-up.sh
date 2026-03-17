@@ -10,11 +10,15 @@ fi
 
 DB_PORT="${MAIXU_DB_PORT:-5432}"
 REDIS_PORT="${MAIXU_REDIS_PORT:-6379}"
+POSTGRES_IMAGE="${MAIXU_POSTGRES_IMAGE:-postgres:16-alpine}"
+REDIS_IMAGE="${MAIXU_REDIS_IMAGE:-redis:7-alpine}"
 NETWORK_NAME="maixu-dev-net"
 
 if ! docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
   docker network create "$NETWORK_NAME" >/dev/null
 fi
+
+echo "using images: postgres=$POSTGRES_IMAGE redis=$REDIS_IMAGE"
 
 if docker ps -a --format '{{.Names}}' | grep -qx 'maixu-postgres'; then
   docker start maixu-postgres >/dev/null
@@ -27,7 +31,7 @@ else
     -e POSTGRES_DB=maixu \
     -p "${DB_PORT}:5432" \
     -v maixu-postgres-data:/var/lib/postgresql/data \
-    postgres:16-alpine >/dev/null
+    "$POSTGRES_IMAGE" >/dev/null
 fi
 
 if docker ps -a --format '{{.Names}}' | grep -qx 'maixu-redis'; then
@@ -38,7 +42,7 @@ else
     --network "$NETWORK_NAME" \
     -p "${REDIS_PORT}:6379" \
     -v maixu-redis-data:/data \
-    redis:7-alpine redis-server --appendonly yes >/dev/null
+    "$REDIS_IMAGE" redis-server --appendonly yes >/dev/null
 fi
 
 for _ in $(seq 1 30); do

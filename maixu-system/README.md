@@ -22,6 +22,14 @@ npm run db:up
 ```
 
 > 默认端口：PostgreSQL `5432`，Redis `6379`
+>
+> 如果你本机拉取 Docker Hub 很慢，可以切镜像源再启动：
+>
+> ```bash
+> MAIXU_POSTGRES_IMAGE=registry.cn-hangzhou.aliyuncs.com/library/postgres:16-alpine \
+> MAIXU_REDIS_IMAGE=registry.cn-hangzhou.aliyuncs.com/library/redis:7-alpine \
+> npm run db:up
+> ```
 
 ### 2) 配置后端环境变量
 
