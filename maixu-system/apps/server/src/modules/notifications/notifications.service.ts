@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationChannel, NotificationStatus, Prisma, RoleCode } from '@prisma/client';
 import { DemoStoreService } from '../../common/demo/demo-store.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -13,6 +14,9 @@ type LeaveNoticeWithRelations = Prisma.LeaveNoticeGetPayload<{
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+  private timeoutCheckRunning = false;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly demoStoreService: DemoStoreService,
@@ -25,6 +29,33 @@ export class NotificationsService {
 
   getHealth() {
     return { module: 'notifications', ok: true };
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async autoCheckLeaveNoticeTimeoutsEveryMinute() {
+    const enabled = (process.env.NOTIFICATION_TIMEOUT_CRON_ENABLED ?? 'true').toLowerCase() !== 'false';
+    const everyMinutes = Math.max(1, Number(process.env.NOTIFICATION_TIMEOUT_EVERY_MINUTES ?? '1'));
+
+    if (!enabled) return;
+
+    const currentMinute = new Date().getMinutes();
+    if (currentMinute % everyMinutes !== 0) return;
+
+    if (this.timeoutCheckRunning) return;
+    this.timeoutCheckRunning = true;
+
+    try {
+      const result = await this.checkLeaveNoticeTimeouts();
+      if (result.timeoutCount > 0) {
+        this.logger.log(
+          `leave timeout auto-check handled ${result.timeoutCount} notice(s), logs=${result.logsCreated}`,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(`leave timeout auto-check failed: ${(error as Error)?.message || error}`);
+    } finally {
+      this.timeoutCheckRunning = false;
+    }
   }
 
   async checkLeaveNoticeTimeouts(payload?: { slotId?: string; dryRun?: boolean; simulateNowOffsetSeconds?: number }) {

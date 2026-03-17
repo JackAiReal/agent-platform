@@ -1,6 +1,6 @@
 import { ApiErrorPayload } from './types';
 
-export type ApiRequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+export type ApiRequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface ApiTransportRequest {
   url: string;
@@ -113,6 +113,10 @@ export class ApiHttpClient {
 
   async put<T>(path: string, data?: unknown, auth = false) {
     return this.request<T>({ path, method: 'PUT', data, auth });
+  }
+
+  async patch<T>(path: string, data?: unknown, auth = false) {
+    return this.request<T>({ path, method: 'PATCH', data, auth });
   }
 
   async delete<T>(path: string, auth = false) {

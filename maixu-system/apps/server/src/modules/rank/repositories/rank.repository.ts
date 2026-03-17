@@ -94,7 +94,17 @@ export class RankRepository {
     };
   }
 
-  async joinRank(payload: { slotId: string; userId: string; sourceContent: string; score: number; sourceType?: 'KEYWORD' | 'MANUAL' }) {
+  async joinRank(payload: {
+    slotId: string;
+    userId: string;
+    sourceContent: string;
+    score: number;
+    sourceType?: RankSourceType;
+    isTop?: boolean;
+    isBuy8?: boolean;
+    isInsert?: boolean;
+    allowLowerReplace?: boolean;
+  }) {
     if (this.useDemoMode) {
       return this.demoStoreService.joinRank(payload);
     }
@@ -126,7 +136,7 @@ export class RankRepository {
       orderBy: { createdAt: 'desc' },
     });
 
-    if (existing && payload.score <= Number(existing.score)) {
+    if (existing && payload.score <= Number(existing.score) && !payload.allowLowerReplace) {
       return {
         accepted: false,
         reason: 'new score is not higher than current active score',
@@ -149,9 +159,12 @@ export class RankRepository {
       data: {
         roomSlotId: payload.slotId,
         userId: payload.userId,
-        sourceType: payload.sourceType === 'MANUAL' ? RankSourceType.MANUAL : RankSourceType.KEYWORD,
+        sourceType: payload.sourceType ?? RankSourceType.KEYWORD,
         sourceContent: payload.sourceContent,
         score: payload.score,
+        isTop: Boolean(payload.isTop),
+        isBuy8: Boolean(payload.isBuy8),
+        isInsert: Boolean(payload.isInsert),
       },
     });
 

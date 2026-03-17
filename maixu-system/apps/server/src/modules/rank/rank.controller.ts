@@ -39,6 +39,54 @@ export class RankController {
     return this.rankCommandService.cancel(slotId, body);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('slots/:slotId/use-top-card')
+  useTopCard(
+    @Param('slotId') slotId: string,
+    @CurrentUser() user: { sub: string },
+    @Body() body: { sourceContent?: string },
+  ) {
+    return this.rankCommandService.useTopCard(slotId, {
+      userId: user.sub,
+      sourceContent: body.sourceContent,
+    });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('slots/:slotId/use-buy8')
+  useBuy8(
+    @Param('slotId') slotId: string,
+    @CurrentUser() user: { sub: string },
+    @Body() body: { sourceContent?: string; score?: number },
+  ) {
+    return this.rankCommandService.useBuy8(slotId, {
+      userId: user.sub,
+      sourceContent: body.sourceContent,
+      score: body.score,
+    });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('slots/:slotId/use-insert')
+  useInsert(
+    @Param('slotId') slotId: string,
+    @CurrentUser() user: { sub: string },
+    @Body() body: { targetRank: number; sourceContent?: string },
+  ) {
+    return this.rankCommandService.useInsert(slotId, {
+      userId: user.sub,
+      targetRank: body.targetRank,
+      sourceContent: body.sourceContent,
+    });
+  }
+
+  @UseGuards(JwtAuthGuard, SlotRoleGuard)
+  @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
+  @Post('slots/:slotId/settle')
+  settle(@Param('slotId') slotId: string, @CurrentUser() user: { sub: string }) {
+    return this.rankCommandService.settle(slotId, user.sub);
+  }
+
   @UseGuards(JwtAuthGuard, SlotRoleGuard)
   @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
   @Post('slots/:slotId/manual-add')

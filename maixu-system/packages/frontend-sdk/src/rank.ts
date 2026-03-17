@@ -9,8 +9,12 @@ import {
   RankPoliciesVO,
   RankResponseVO,
   ResetSlotResponse,
+  SettleSlotResponse,
   TransferEntryPayload,
   TransferEntryResponse,
+  UseBuy8Payload,
+  UseInsertPayload,
+  UseTopCardPayload,
 } from './types';
 
 export function createRankApi(client: ApiHttpClient) {
@@ -31,6 +35,18 @@ export function createRankApi(client: ApiHttpClient) {
       return client.post<CancelRankResponse>(`/rank/slots/${slotId}/cancel`, payload);
     },
 
+    useTopCard(slotId: string, payload?: UseTopCardPayload) {
+      return client.post<JoinRankResponse>(`/rank/slots/${slotId}/use-top-card`, payload, true);
+    },
+
+    useBuy8(slotId: string, payload?: UseBuy8Payload) {
+      return client.post<JoinRankResponse>(`/rank/slots/${slotId}/use-buy8`, payload, true);
+    },
+
+    useInsert(slotId: string, payload: UseInsertPayload) {
+      return client.post<JoinRankResponse>(`/rank/slots/${slotId}/use-insert`, payload, true);
+    },
+
     manualAdd(slotId: string, payload: ManualAddPayload) {
       return client.post<JoinRankResponse>(`/rank/slots/${slotId}/manual-add`, payload, true);
     },
@@ -45,6 +61,10 @@ export function createRankApi(client: ApiHttpClient) {
 
     resetSlot(slotId: string) {
       return client.post<ResetSlotResponse>(`/rank/slots/${slotId}/reset-slot`, undefined, true);
+    },
+
+    settle(slotId: string) {
+      return client.post<SettleSlotResponse>(`/rank/slots/${slotId}/settle`, undefined, true);
     },
   };
 }

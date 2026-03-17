@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import appConfig from './config/app.config';
 import dbConfig from './config/db.config';
 import jwtConfig from './config/jwt.config';
@@ -29,6 +30,7 @@ import { AuditModule } from './modules/audit/audit.module';
       envFilePath: '.env',
       load: [appConfig, dbConfig, redisConfig, jwtConfig],
     }),
+    ScheduleModule.forRoot(),
     LoggerModule,
     DemoStoreModule,
     RepositoriesModule,

@@ -9,6 +9,7 @@ import { createRankApi } from './rank';
 import { createRoomConfigsApi } from './room-configs';
 import { createRoomsApi } from './rooms';
 import { createSlotsApi } from './slots';
+import { createUsersApi } from './users';
 
 export * from './types';
 export * from './http';
@@ -28,6 +29,7 @@ export function createMaixuSdk(options: MaixuSdkOptions) {
     hostSchedules: createHostSchedulesApi(client),
     notifications: createNotificationsApi(client),
     audit: createAuditApi(client),
+    users: createUsersApi(client),
   };
 }
 

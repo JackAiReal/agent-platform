@@ -333,6 +333,44 @@ async function main() {
     },
   });
 
+  await prisma.userPerkInventory.upsert({
+    where: {
+      id: '00000000-0000-0000-0000-000000000002',
+    },
+    update: {
+      userId: guest.id,
+      roomId: roomA.id,
+      perkType: PerkType.BUY8_TICKET,
+      quantity: 2,
+    },
+    create: {
+      id: '00000000-0000-0000-0000-000000000002',
+      userId: guest.id,
+      roomId: roomA.id,
+      perkType: PerkType.BUY8_TICKET,
+      quantity: 2,
+    },
+  });
+
+  await prisma.userPerkInventory.upsert({
+    where: {
+      id: '00000000-0000-0000-0000-000000000003',
+    },
+    update: {
+      userId: guest.id,
+      roomId: roomA.id,
+      perkType: PerkType.PRIORITY_JOIN,
+      quantity: 2,
+    },
+    create: {
+      id: '00000000-0000-0000-0000-000000000003',
+      userId: guest.id,
+      roomId: roomA.id,
+      perkType: PerkType.PRIORITY_JOIN,
+      quantity: 2,
+    },
+  });
+
   console.log('seed complete');
   console.log({
     users: { admin: admin.id, host: host.id, guest: guest.id },

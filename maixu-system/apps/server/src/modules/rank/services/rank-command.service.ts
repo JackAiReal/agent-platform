@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { SlotState } from '@prisma/client';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { PerkType, RankEntryStatus, RankSourceType, SlotState } from '@prisma/client';
+import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { WsGateway } from '../../../infrastructure/ws/ws.gateway';
 import { AuditService } from '../../audit/audit.service';
 import { ChallengesService } from '../../challenges/challenges.service';
@@ -15,8 +16,13 @@ export class RankCommandService {
     private readonly slotsRepository: SlotsRepository,
     private readonly challengesService: ChallengesService,
     private readonly auditService: AuditService,
+    private readonly prisma: PrismaService,
     private readonly wsGateway: WsGateway,
   ) {}
+
+  private get useDemoMode() {
+    return !process.env.DATABASE_URL;
+  }
 
   async join(slotId: string, payload: { userId: string; sourceContent: string; score: number; challengeTicket?: string }) {
     const challenge = await this.challengesService.assertJoinAllowed(slotId, payload.userId, payload.challengeTicket);
@@ -34,7 +40,7 @@ export class RankCommandService {
       userId: payload.userId,
       sourceContent: payload.sourceContent,
       score: payload.score,
-      sourceType: 'KEYWORD',
+      sourceType: RankSourceType.KEYWORD,
     });
 
     return this.emitRankChanged(slotId, result);
@@ -60,7 +66,7 @@ export class RankCommandService {
       userId: payload.userId,
       sourceContent: payload.sourceContent,
       score: payload.score,
-      sourceType: 'MANUAL',
+      sourceType: RankSourceType.MANUAL,
     });
 
     await this.logHostAction(slotId, operatorUserId, 'rank.manual_add', payload.userId, {
@@ -72,6 +78,122 @@ export class RankCommandService {
       mode: 'manual',
       ...result,
     });
+  }
+
+  async useTopCard(slotId: string, payload: { userId: string; sourceContent?: string }) {
+    await this.consumePerk(slotId, payload.userId, PerkType.TOP_CARD);
+
+    const rank = await this.rankRepository.getRank(slotId);
+    const topScore = rank.entries[0]?.score ?? 0;
+    const score = Number(topScore) + 0.01;
+
+    const result = await this.rankRepository.joinRank({
+      slotId,
+      userId: payload.userId,
+      sourceContent: payload.sourceContent || 'TOP_CARD',
+      score,
+      sourceType: RankSourceType.TOP_CARD,
+      isTop: true,
+      allowLowerReplace: true,
+    });
+
+    return this.emitRankChanged(slotId, {
+      mode: 'top-card',
+      ...result,
+    });
+  }
+
+  async useBuy8(slotId: string, payload: { userId: string; sourceContent?: string; score?: number }) {
+    await this.consumePerk(slotId, payload.userId, PerkType.BUY8_TICKET);
+
+    const score = Number(payload.score ?? 88);
+    const result = await this.rankRepository.joinRank({
+      slotId,
+      userId: payload.userId,
+      sourceContent: payload.sourceContent || 'BUY8',
+      score,
+      sourceType: RankSourceType.BUY8,
+      isBuy8: true,
+      allowLowerReplace: true,
+    });
+
+    return this.emitRankChanged(slotId, {
+      mode: 'buy8',
+      ...result,
+    });
+  }
+
+  async useInsert(slotId: string, payload: { userId: string; targetRank: number; sourceContent?: string }) {
+    await this.consumePerk(slotId, payload.userId, PerkType.PRIORITY_JOIN);
+
+    const rank = await this.rankRepository.getRank(slotId);
+    if (rank.entries.length === 0) {
+      throw new BadRequestException('rank is empty, no need to use insert');
+    }
+
+    const targetRank = Math.max(1, Math.min(payload.targetRank, rank.entries.length));
+    const upper = rank.entries[targetRank - 2];
+    const lower = rank.entries[targetRank - 1];
+
+    const upperScore = upper ? Number(upper.score) : Number(lower.score) + 1;
+    const lowerScore = Number(lower.score);
+
+    const score = upperScore === lowerScore ? upperScore + 0.01 : (upperScore + lowerScore) / 2;
+
+    const result = await this.rankRepository.joinRank({
+      slotId,
+      userId: payload.userId,
+      sourceContent: payload.sourceContent || `INSERT@${targetRank}`,
+      score,
+      sourceType: RankSourceType.INSERT,
+      isInsert: true,
+      allowLowerReplace: true,
+    });
+
+    return this.emitRankChanged(slotId, {
+      mode: 'insert',
+      targetRank,
+      ...result,
+    });
+  }
+
+  async settle(slotId: string, operatorUserId?: string) {
+    if (this.useDemoMode) {
+      const resetResult = (await this.resetSlot(slotId, operatorUserId)) as {
+        affectedCount?: number;
+        currentRank: unknown;
+      };
+      return {
+        slotId,
+        settled: true,
+        settledCount: resetResult.affectedCount ?? 0,
+        currentRank: resetResult.currentRank,
+      };
+    }
+
+    const result = await this.prisma.rankEntry.updateMany({
+      where: {
+        roomSlotId: slotId,
+        status: RankEntryStatus.ACTIVE,
+      },
+      data: {
+        status: RankEntryStatus.SETTLED,
+      },
+    });
+
+    await this.slotsRepository.updateSlotState(slotId, SlotState.SETTLED);
+    await this.logHostAction(slotId, operatorUserId, 'rank.settle', slotId, {
+      settledCount: result.count,
+    });
+
+    return this.emitRankChanged(
+      slotId,
+      {
+        settled: true,
+        settledCount: result.count,
+      },
+      true,
+    );
   }
 
   async invalidateEntry(slotId: string, payload: { entryId: string }, operatorUserId?: string) {
@@ -100,6 +222,52 @@ export class RankCommandService {
     await this.logHostAction(slotId, operatorUserId, 'rank.reset_slot', slotId);
 
     return this.emitRankChanged(slotId, result, true);
+  }
+
+  private async consumePerk(slotId: string, userId: string, perkType: PerkType, usedQuantity = 1) {
+    if (this.useDemoMode) {
+      return { remainingQty: 999 };
+    }
+
+    const slot = await this.slotsRepository.getSlot(slotId);
+
+    const inventory = await this.prisma.userPerkInventory.findFirst({
+      where: {
+        userId,
+        roomId: slot.roomId,
+        perkType,
+        OR: [{ expireAt: null }, { expireAt: { gt: new Date() } }],
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (!inventory || inventory.quantity < usedQuantity) {
+      throw new BadRequestException(`${perkType} is not enough`);
+    }
+
+    const updated = await this.prisma.userPerkInventory.update({
+      where: { id: inventory.id },
+      data: {
+        quantity: {
+          decrement: usedQuantity,
+        },
+      },
+    });
+
+    await this.prisma.perkUsageLog.create({
+      data: {
+        roomId: slot.roomId,
+        roomSlotId: slotId,
+        userId,
+        perkType,
+        usedQuantity,
+        payload: {
+          remainingQty: updated.quantity,
+        },
+      },
+    });
+
+    return { remainingQty: updated.quantity };
   }
 
   private async logHostAction(

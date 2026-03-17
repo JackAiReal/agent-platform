@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { RoleCode } from '@prisma/client';
+import { RoleCode, UserStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 type DemoUser = {
@@ -7,6 +7,7 @@ type DemoUser = {
   nickname: string;
   avatarUrl?: string;
   openid?: string;
+  status: UserStatus;
   createdAt: string;
 };
 
@@ -45,7 +46,7 @@ type DemoRankEntry = {
   id: string;
   roomSlotId: string;
   userId: string;
-  sourceType: 'KEYWORD' | 'MANUAL' | 'TRANSFER';
+  sourceType: 'KEYWORD' | 'MANUAL' | 'TRANSFER' | 'TOP_CARD' | 'BUY8' | 'INSERT';
   sourceContent: string;
   score: number;
   status: DemoRankEntryStatus;
@@ -178,6 +179,7 @@ export class DemoStoreService {
       nickname: payload.nickname,
       avatarUrl: payload.avatarUrl,
       openid: payload.openid,
+      status: UserStatus.ACTIVE,
       createdAt: new Date().toISOString(),
     };
 
@@ -313,7 +315,14 @@ export class DemoStoreService {
     };
   }
 
-  joinRank(payload: { slotId: string; userId: string; sourceContent: string; score: number; sourceType?: 'KEYWORD' | 'MANUAL' }) {
+  joinRank(payload: {
+    slotId: string;
+    userId: string;
+    sourceContent: string;
+    score: number;
+    sourceType?: string;
+    allowLowerReplace?: boolean;
+  }) {
     const slot = this.getSlot(payload.slotId);
     const room = this.getRoom(slot.roomId);
     const user = this.getUserById(payload.userId);
@@ -324,7 +333,7 @@ export class DemoStoreService {
 
     const existing = this.getActiveRankEntries(slot.id).find((item) => item.userId === payload.userId);
     if (existing) {
-      if (payload.score <= existing.score) {
+      if (payload.score <= existing.score && !payload.allowLowerReplace) {
         return {
           accepted: false,
           reason: 'new score is not higher than current active score',
@@ -341,7 +350,7 @@ export class DemoStoreService {
       id: randomUUID(),
       roomSlotId: slot.id,
       userId: payload.userId,
-      sourceType: payload.sourceType ?? 'KEYWORD',
+      sourceType: this.normalizeDemoSourceType(payload.sourceType),
       sourceContent: payload.sourceContent,
       score: payload.score,
       status: 'ACTIVE',
@@ -464,6 +473,23 @@ export class DemoStoreService {
     return this.roomRoles.some(
       (item) => item.userId === userId && item.roomId === roomId && allowedRoles.includes(item.roleCode),
     );
+  }
+
+  userHasAnyRole(userId: string, allowedRoles: RoleCode[]) {
+    return this.roomRoles.some((item) => item.userId === userId && allowedRoles.includes(item.roleCode));
+  }
+
+  listUsers() {
+    return [...this.users];
+  }
+
+  updateUserStatus(userId: string, status: UserStatus) {
+    const user = this.getUserById(userId);
+    if (!user) {
+      throw new NotFoundException('user not found');
+    }
+    user.status = status;
+    return user;
   }
 
   listRoomUsers(roomId: string) {
@@ -625,6 +651,20 @@ export class DemoStoreService {
         notice.status = 'EXPIRED';
         notice.updatedAt = new Date().toISOString();
       }
+    }
+  }
+
+  private normalizeDemoSourceType(sourceType?: string): DemoRankEntry['sourceType'] {
+    switch (sourceType) {
+      case 'MANUAL':
+      case 'TRANSFER':
+      case 'TOP_CARD':
+      case 'BUY8':
+      case 'INSERT':
+      case 'KEYWORD':
+        return sourceType;
+      default:
+        return 'KEYWORD';
     }
   }
 

@@ -98,6 +98,20 @@ export interface ManualAddPayload {
   score: number;
 }
 
+export interface UseTopCardPayload {
+  sourceContent?: string;
+}
+
+export interface UseBuy8Payload {
+  sourceContent?: string;
+  score?: number;
+}
+
+export interface UseInsertPayload {
+  targetRank: number;
+  sourceContent?: string;
+}
+
 export interface InvalidateEntryPayload {
   entryId: string;
 }
@@ -147,6 +161,14 @@ export interface TransferEntryResponse {
   transferred: boolean;
   fromEntryId: string;
   toEntry: Record<string, unknown>;
+  currentRank: RankResponseVO;
+}
+
+export interface SettleSlotResponse {
+  slotId: string;
+  settled: boolean;
+  settledCount: number;
+  slot: SlotVO;
   currentRank: RankResponseVO;
 }
 
@@ -356,6 +378,32 @@ export interface AuditLogVO {
   targetId?: string;
   payload?: Record<string, unknown>;
   createdAt: string;
+}
+
+export interface UserSearchPayload {
+  keyword?: string;
+  status?: string;
+  roomId?: string;
+  limit?: number;
+}
+
+export interface UserBanPolicyVO {
+  id: string;
+  roomId: string;
+  userId: string;
+  banType: string;
+  reason?: string;
+  startAt: string;
+  endAt?: string;
+  createdById?: string;
+  createdAt: string;
+  user?: UserVO;
+}
+
+export interface UserRoomListsVO {
+  roomId: string;
+  whitelistUserIds: string[];
+  blacklistUserIds: string[];
 }
 
 export interface ApiErrorPayload {
