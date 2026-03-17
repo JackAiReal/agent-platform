@@ -1,7 +1,7 @@
-import { Button, Input, Text, View } from '@tarojs/components';
+import { Button, Text, View } from '@tarojs/components';
 import Taro, { getCurrentInstance, useDidShow, useUnload } from '@tarojs/taro';
-import { useRef, useState } from 'react';
-import type { HostDashboardVO, LeaveNoticeSnapshotVO } from '@maixu/frontend-sdk';
+import { useMemo, useRef, useState } from 'react';
+import type { HostDashboardVO, LeaveNoticeSnapshotVO, RankEntryVO, UserVO } from '@maixu/frontend-sdk';
 import { buildUserLabel, requireLogin } from '../../../services/auth';
 import { getCurrentUser, sdk } from '../../../services/sdk';
 import { createWsRankSubscription } from '../../../services/ws';
@@ -13,19 +13,36 @@ export default function HostDashboardPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wsCleanupRef = useRef<null | (() => void)>(null);
   const slotId = getCurrentInstance().router?.params?.slotId || '';
+
   const [dashboard, setDashboard] = useState<HostDashboardVO | null>(null);
   const [leaveSnapshot, setLeaveSnapshot] = useState<LeaveNoticeSnapshotVO | null>(null);
+  const [userOptions, setUserOptions] = useState<UserVO[]>([]);
   const [manualUserId, setManualUserId] = useState('');
-  const [transferTargetId, setTransferTargetId] = useState('');
   const [wsConnected, setWsConnected] = useState(false);
+
   const currentUser = getCurrentUser<{ nickname?: string; id?: string }>();
+
+  const userOptionMap = useMemo(() => {
+    const map = new Map<string, UserVO>();
+    userOptions.forEach((item) => {
+      map.set(item.id, item);
+    });
+    return map;
+  }, [userOptions]);
+
+  const manualUser = manualUserId ? userOptionMap.get(manualUserId) : undefined;
 
   const loadDashboard = async () => {
     try {
-      const data = await sdk.slots.hostDashboard(slotId);
-      setDashboard(data);
-      const leaveData = await sdk.leaveNotices.list(slotId);
+      const [dashboardData, leaveData, users] = await Promise.all([
+        sdk.slots.hostDashboard(slotId),
+        sdk.leaveNotices.list(slotId),
+        sdk.slots.userOptions(slotId),
+      ]);
+
+      setDashboard(dashboardData);
       setLeaveSnapshot(leaveData);
+      setUserOptions(users);
     } catch (error) {
       showError(error);
     }
@@ -37,15 +54,20 @@ export default function HostDashboardPage() {
       if (!user) return;
 
       try {
-        const data = await sdk.slots.hostDashboard(slotId);
-        setDashboard(data);
-        const leaveData = await sdk.leaveNotices.list(slotId);
+        const [dashboardData, leaveData, users] = await Promise.all([
+          sdk.slots.hostDashboard(slotId),
+          sdk.leaveNotices.list(slotId),
+          sdk.slots.userOptions(slotId),
+        ]);
+
+        setDashboard(dashboardData);
         setLeaveSnapshot(leaveData);
+        setUserOptions(users);
 
         wsCleanupRef.current?.();
         wsCleanupRef.current = createWsRankSubscription({
           slotId,
-          roomId: data.room.id,
+          roomId: dashboardData.room.id,
           onConnected: () => setWsConnected(true),
           onDisconnected: () => setWsConnected(false),
           onRankUpdated: (rank) => {
@@ -73,13 +95,58 @@ export default function HostDashboardPage() {
     setWsConnected(false);
   });
 
-  const firstEntryId = dashboard?.entries[0]?.id;
+  const pickUserFromActionSheet = async (options: UserVO[], title: string) => {
+    if (options.length === 0) {
+      throw new Error('当前没有可选用户');
+    }
+
+    const itemList = options.map((item) => `${item.nickname} · ${item.id.slice(0, 8)}`);
+
+    try {
+      const result = await Taro.showActionSheet({
+        alertText: title,
+        itemList,
+      });
+
+      const selected = options[result.tapIndex];
+      if (!selected) {
+        throw new Error('未选择用户');
+      }
+
+      return selected;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('cancel')) {
+        return null;
+      }
+      throw error;
+    }
+  };
+
+  const handlePickManualUser = async () => {
+    try {
+      const selected = await pickUserFromActionSheet(userOptions, '选择手动加榜用户');
+      if (!selected) return;
+      setManualUserId(selected.id);
+      showSuccess(`已选择：${selected.nickname}`);
+    } catch (error) {
+      showError(error);
+    }
+  };
 
   const handleManualAdd = async () => {
-    if (!manualUserId.trim()) return;
+    let targetId = manualUserId;
+
     try {
+      if (!targetId) {
+        const selected = await pickUserFromActionSheet(userOptions, '选择手动加榜用户');
+        if (!selected) return;
+        targetId = selected.id;
+        setManualUserId(selected.id);
+      }
+
       const result = await sdk.rank.manualAdd(slotId, {
-        userId: manualUserId.trim(),
+        userId: targetId,
         sourceContent: '手动加麦',
         score: 999,
       });
@@ -100,15 +167,18 @@ export default function HostDashboardPage() {
     }
   };
 
-  const handleTransfer = async () => {
-    if (!firstEntryId || !transferTargetId.trim()) return;
+  const handleTransfer = async (entry: RankEntryVO) => {
     try {
+      const candidates = userOptions.filter((item) => item.id !== entry.userId);
+      const selected = await pickUserFromActionSheet(candidates, `转麦给谁？（当前：${entry.user?.nickname || entry.userId}）`);
+      if (!selected) return;
+
       const result = await sdk.rank.transferEntry(slotId, {
-        entryId: firstEntryId,
-        toUserId: transferTargetId.trim(),
+        entryId: entry.id,
+        toUserId: selected.id,
       });
       setDashboard(rankToDashboard(result.currentRank));
-      showSuccess('转麦成功');
+      showSuccess(`转麦成功 → ${selected.nickname}`);
     } catch (error) {
       showError(error);
     }
@@ -166,6 +236,7 @@ export default function HostDashboardPage() {
         <View className='subtitle'>{dashboard.room.name}</View>
         <View className='subtitle'>当前状态：{dashboard.summary.state}</View>
         <View className='subtitle'>总人数：{dashboard.summary.totalEntries}</View>
+        <View className='subtitle'>用户池：{userOptions.length} 人</View>
         <View className='subtitle'>实时刷新：{wsConnected ? 'WebSocket 已连接' : '轮询兜底中'}</View>
       </View>
 
@@ -196,35 +267,22 @@ export default function HostDashboardPage() {
       </View>
 
       <View className='card'>
-        <View className='title'>手动操作</View>
-        <Input
-          className='input-line'
-          placeholder='手动加榜 userId'
-          value={manualUserId}
-          onInput={(e) => setManualUserId(e.detail.value)}
-        />
+        <View className='title'>手动操作（用户选择器）</View>
+        <View className='subtitle'>当前选择：{manualUser ? `${manualUser.nickname} (${manualUser.id.slice(0, 8)})` : '未选择'}</View>
         <View className='btn-row action-group'>
+          <Button onClick={handlePickManualUser}>选择用户</Button>
           <Button className='success-btn' onClick={handleManualAdd}>手动加榜</Button>
-        </View>
-
-        <Input
-          className='input-line'
-          placeholder='转麦目标 userId（默认转榜首）'
-          value={transferTargetId}
-          onInput={(e) => setTransferTargetId(e.detail.value)}
-        />
-        <View className='btn-row action-group'>
-          <Button onClick={handleTransfer}>转麦（榜首）</Button>
         </View>
       </View>
 
       <View className='card'>
-        <View className='title'>当前榜单</View>
+        <View className='title'>当前榜单（含转麦弹层）</View>
         {dashboard.entries.map((item) => (
           <View className='card' key={item.id}>
             <View>No.{item.rank} · {item.user?.nickname || item.userId}</View>
             <View className='subtitle'>{item.sourceContent} / {item.score}</View>
             <View className='btn-row action-group'>
+              <Button onClick={() => handleTransfer(item)}>转麦</Button>
               <Button className='danger-btn' onClick={() => handleInvalidate(item.id)}>作废</Button>
             </View>
           </View>

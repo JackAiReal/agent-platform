@@ -26,6 +26,13 @@ export class SlotsController {
     return this.slotsService.getHostDashboard(slotId);
   }
 
+  @UseGuards(JwtAuthGuard, SlotRoleGuard)
+  @SlotRoles(RoleCode.HOST, RoleCode.ROOM_ADMIN, RoleCode.SUPER_ADMIN)
+  @Get(':slotId/user-options')
+  getSlotUserOptions(@Param('slotId') slotId: string) {
+    return this.slotsService.getSlotUserOptions(slotId);
+  }
+
   @Get(':slotId')
   getSlot(@Param('slotId') slotId: string) {
     return this.slotsService.getSlot(slotId);

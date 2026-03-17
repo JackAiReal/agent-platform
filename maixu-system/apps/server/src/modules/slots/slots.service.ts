@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { SlotState } from '@prisma/client';
+import { DemoStoreService } from '../../common/demo/demo-store.service';
+import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { WsGateway } from '../../infrastructure/ws/ws.gateway';
 import { RankRepository } from '../rank/repositories/rank.repository';
 import { RoomsRepository } from '../rooms/repositories/rooms.repository';
@@ -11,8 +13,14 @@ export class SlotsService {
     private readonly slotsRepository: SlotsRepository,
     private readonly roomsRepository: RoomsRepository,
     private readonly rankRepository: RankRepository,
+    private readonly demoStoreService: DemoStoreService,
+    private readonly prisma: PrismaService,
     private readonly wsGateway: WsGateway,
   ) {}
+
+  private get useDemoMode() {
+    return !process.env.DATABASE_URL;
+  }
 
   getHealth() {
     return { module: 'slots', ok: true };
@@ -48,6 +56,32 @@ export class SlotsService {
       entries: rank.entries,
       topEntries: rank.topEntries,
     };
+  }
+
+  async getSlotUserOptions(slotId: string) {
+    const slot = await this.slotsRepository.getSlot(slotId);
+
+    if (this.useDemoMode) {
+      return this.demoStoreService.listRoomUsers(slot.roomId);
+    }
+
+    const roleUsers = await this.prisma.userRoomRole.findMany({
+      where: { roomId: slot.roomId },
+      distinct: ['userId'],
+      include: { user: true },
+      orderBy: {
+        user: {
+          createdAt: 'asc',
+        },
+      },
+    });
+
+    return roleUsers.map((item) => ({
+      id: item.user.id,
+      nickname: item.user.nickname,
+      avatarUrl: item.user.avatarUrl,
+      createdAt: item.user.createdAt,
+    }));
   }
 
   async closeSpeedStage(slotId: string) {

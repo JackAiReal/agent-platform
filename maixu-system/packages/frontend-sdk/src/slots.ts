@@ -15,6 +15,13 @@ export function createSlotsApi(client: ApiHttpClient) {
       return client.get<HostDashboardVO>(`/slots/${slotId}/host-dashboard`, true);
     },
 
+    userOptions(slotId: string) {
+      return client.get<Array<{ id: string; nickname: string; avatarUrl?: string; createdAt?: string }>>(
+        `/slots/${slotId}/user-options`,
+        true,
+      );
+    },
+
     closeSpeedStage(slotId: string) {
       return client.post<SlotActionResponse>(`/slots/${slotId}/close-speed-stage`, undefined, true);
     },

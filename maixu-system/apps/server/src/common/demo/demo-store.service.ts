@@ -466,6 +466,19 @@ export class DemoStoreService {
     );
   }
 
+  listRoomUsers(roomId: string) {
+    const userIds = new Set(
+      this.roomRoles
+        .filter((item) => item.roomId === roomId)
+        .map((item) => item.userId),
+    );
+
+    return [...userIds]
+      .map((userId) => this.getUserById(userId))
+      .filter((item): item is DemoUser => Boolean(item))
+      .sort((a, b) => a.nickname.localeCompare(b.nickname, 'zh-CN'));
+  }
+
   listLeaveNotices(slotId: string) {
     this.expireLeaveNotices(slotId);
 
