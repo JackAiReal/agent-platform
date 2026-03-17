@@ -47,6 +47,18 @@ const 写作业云端资源基址 = 写作业云端配置API.replace(/\/api\/?$/
 const 写作业云端图片目录 = "/sdcard/Pictures/写作业云端素材";
 const 写作业云端音频目录 = "/sdcard/Music/写作业云端素材";
 
+const 自动化模块云端配置 = {
+    apiBase: 写作业云端配置API,
+    sourceAppCode: MEMBERSHIP_CONFIG.appCode,
+    scriptVersion: 当前版本号,
+    cacheSeconds: 600,
+    useTempToken: true,
+    tempTokenTtlSeconds: 300,
+    tempTokenIssuerSecret: "idbot-temp-issuer-2026",
+    automationSecret: "replace-with-strong-secret",
+    requestTimeoutMs: 15000
+};
+
 /* 获取屏幕信息 */
 const resources = context.getResources();
 let 屏幕信息 = resources.getDisplayMetrics();
@@ -77,6 +89,7 @@ var isCheckedLocal = false
 
 var storage = storages.create("auto" + 脚本名称);
 var dateStorage = storages.create(getCurrentDate() + 脚本名称);
+var 模块缓存存储 = storages.create("module_cache_" + 脚本名称);
 
 var cache = storageNullCreate(dateStorage, "cache", [])
 var page = storageNullCreate(dateStorage, "page", 1)
@@ -3102,10 +3115,6 @@ function 首页ui() {
         toastLog("开始运行");
         ui控件存储();
         let selectedApp = ui.platForms.getSelectedItem();
-        if (!外部自动化模块存在(selectedApp)) {
-            提示缺少自动化模块(selectedApp);
-            return;
-        }
         if (!权限检测({ 悬浮窗: true, 无障碍: true })) { return; }
 
         if (!当前App会员可用()) {
@@ -3520,41 +3529,375 @@ function listenserInOtherPage() {
     })
 }
 
-function 获取自动化模块根目录() {
-    try {
-        let engine = engines.myEngine();
-        if (engine && typeof engine.cwd == "function") {
-            let cwd = engine.cwd();
-            if (cwd) return String(cwd).replace(/\\/g, "/").replace(/\/$/, "");
-        }
-    } catch (e) { }
-    try {
-        let cwd = files.cwd();
-        if (cwd) return String(cwd).replace(/\\/g, "/").replace(/\/$/, "");
-    } catch (e) { }
-    return ".";
+var 最近模块加载错误 = "";
+
+function 生成模块缓存键(moduleCode, appName) {
+    let code = String(moduleCode || "").trim().toLowerCase();
+    if (code) return code;
+    return String(appName || "").trim().toLowerCase();
 }
 
-function 获取自动化模块路径(appName) {
-    return 获取自动化模块根目录() + "/" + appName + ".js";
+function 读取模块缓存表() {
+    let table = 模块缓存存储.get("automation_module_cache_table");
+    return table && typeof table == "object" ? table : {};
 }
 
-function 外部自动化模块存在(appName) {
-    let modulePath = 获取自动化模块路径(appName);
+function 保存模块缓存表(table) {
+    模块缓存存储.put("automation_module_cache_table", table || {});
+}
+
+function 读取模块缓存(moduleCode, appName) {
+    let table = 读取模块缓存表();
+    return table[生成模块缓存键(moduleCode, appName)] || null;
+}
+
+function 保存模块缓存(moduleCode, appName, data) {
+    let table = 读取模块缓存表();
+    table[生成模块缓存键(moduleCode, appName)] = data;
+    保存模块缓存表(table);
+}
+
+function 比较版本号(v1, v2) {
+    let a = String(v1 || "0").split(/[^0-9]+/).filter(Boolean).map(function (x) { return parseInt(x) || 0; });
+    let b = String(v2 || "0").split(/[^0-9]+/).filter(Boolean).map(function (x) { return parseInt(x) || 0; });
+    let len = Math.max(a.length, b.length);
+    for (let i = 0; i < len; i++) {
+        let x = a[i] || 0;
+        let y = b[i] || 0;
+        if (x > y) return 1;
+        if (x < y) return -1;
+    }
+    return 0;
+}
+
+function 模块缓存可用(cacheEntry, latestVersion) {
+    if (!cacheEntry || !cacheEntry.js_plain) return false;
+    let now = new Date().getTime();
+    let expireAt = parseInt(cacheEntry.cache_expire_at || 0);
+    if (expireAt > 0 && now >= expireAt) return false;
+    if (latestVersion && String(cacheEntry.module_version || "") != String(latestVersion || "")) return false;
+    return true;
+}
+
+function 获取模块接口候选地址(path) {
+    let p = String(path || "");
+    if (!p) return [];
+    if (p.charAt(0) != "/") p = "/" + p;
+
+    let base = String(自动化模块云端配置.apiBase || "").replace(/\/$/, "");
+    let root = base.replace(/\/api\/?$/, "");
+    let urls = [];
+
+    function push(url) {
+        if (!url) return;
+        if (urls.indexOf(url) == -1) urls.push(url);
+    }
+
+    push(base + p);
+    push(root + p);
+    if (p.indexOf("/api/") != 0) {
+        push(root + "/api" + p);
+    }
+    return urls;
+}
+
+function 解析JSON文本(rawText) {
     try {
-        return files.exists(modulePath) === true;
+        return JSON.parse(String(rawText || ""));
     } catch (e) {
-        return false;
+        return null;
     }
 }
 
-function 提示缺少自动化模块(appName) {
-    let modulePath = 获取自动化模块路径(appName);
-    let tipText = appName + " 暂时不支持该app，请在当前目录放入对应模块文件：" + appName + ".js";
+function 请求模块GET(path, accessToken, extraHeaders) {
+    let urls = 获取模块接口候选地址(path);
+    let lastError = "";
+    for (let i = 0; i < urls.length; i++) {
+        let url = urls[i];
+        try {
+            let headers = {
+                "Accept": "application/json",
+                "Authorization": "Bearer " + String(accessToken || "")
+            };
+            extraHeaders = extraHeaders || {};
+            Object.keys(extraHeaders).forEach(function (k) { headers[k] = extraHeaders[k]; });
+            let res = http.get(url, { headers: headers });
+            let bodyText = res.body ? res.body.string() : "";
+            let data = 解析JSON文本(bodyText);
+            if (res.statusCode == 404) {
+                lastError = "404: " + url;
+                continue;
+            }
+            return {
+                ok: res.statusCode == 200,
+                statusCode: res.statusCode,
+                data: data,
+                bodyText: bodyText,
+                url: url,
+                error: data && data.message ? data.message : bodyText
+            };
+        } catch (e) {
+            lastError = String(e);
+        }
+    }
+    return { ok: false, statusCode: -1, data: null, bodyText: "", url: "", error: lastError || "请求失败" };
+}
+
+function 请求模块POST(path, payload, accessToken, extraHeaders) {
+    let urls = 获取模块接口候选地址(path);
+    let lastError = "";
+    for (let i = 0; i < urls.length; i++) {
+        let url = urls[i];
+        try {
+            let headers = { "Accept": "application/json" };
+            if (accessToken) headers["Authorization"] = "Bearer " + String(accessToken || "");
+            extraHeaders = extraHeaders || {};
+            Object.keys(extraHeaders).forEach(function (k) { headers[k] = extraHeaders[k]; });
+            let res = http.postJson(url, payload || {}, { headers: headers });
+            let bodyText = res.body ? res.body.string() : "";
+            let data = 解析JSON文本(bodyText);
+            if (res.statusCode == 404) {
+                lastError = "404: " + url;
+                continue;
+            }
+            return {
+                ok: res.statusCode == 200,
+                statusCode: res.statusCode,
+                data: data,
+                bodyText: bodyText,
+                url: url,
+                error: data && data.message ? data.message : bodyText
+            };
+        } catch (e) {
+            lastError = String(e);
+        }
+    }
+    return { ok: false, statusCode: -1, data: null, bodyText: "", url: "", error: lastError || "请求失败" };
+}
+
+function 读取临时模块令牌缓存() {
+    let tokenData = 模块缓存存储.get("automation_module_temp_token") || {};
+    return tokenData && typeof tokenData == "object" ? tokenData : {};
+}
+
+function 保存临时模块令牌缓存(tokenData) {
+    模块缓存存储.put("automation_module_temp_token", tokenData || {});
+}
+
+function 获取模块访问令牌() {
+    if (!自动化模块云端配置.useTempToken) {
+        if (!控件信息.token) {
+            throw new Error("请先登录后再运行");
+        }
+        return {
+            token: 控件信息.token,
+            auth_mode: "member"
+        };
+    }
+
+    let now = new Date().getTime();
+    let tokenData = 读取临时模块令牌缓存();
+    if (tokenData.token && tokenData.expire_at && now < (parseInt(tokenData.expire_at) - 15 * 1000)) {
+        return {
+            token: tokenData.token,
+            auth_mode: "temp_token"
+        };
+    }
+
+    let issueSecret = String(自动化模块云端配置.tempTokenIssuerSecret || "").trim();
+    if (!issueSecret) {
+        throw new Error("未配置 temp token 签发密钥");
+    }
+
+    let issueResp = 请求模块POST(
+        "/automation/modules/temp-token",
+        {
+            source_app_code: 自动化模块云端配置.sourceAppCode,
+            android_id: androidId,
+            subject: "autojs_" + String(控件信息.账号 || androidId || "user"),
+            ttl_seconds: parseInt(自动化模块云端配置.tempTokenTtlSeconds) || 300
+        },
+        null,
+        {
+            "X-Automation-Issuer-Secret": issueSecret
+        }
+    );
+
+    if (!issueResp.ok || !issueResp.data || issueResp.data.code !== 0) {
+        throw new Error((issueResp.data && issueResp.data.message) || issueResp.error || "签发临时令牌失败");
+    }
+
+    let token = ((issueResp.data || {}).data || {}).access_token || "";
+    let expiresAt = ((issueResp.data || {}).data || {}).expires_at || "";
+    if (!token) {
+        throw new Error("签发临时令牌失败: 未返回 access_token");
+    }
+
+    let parsedExpire = Date.parse(expiresAt);
+    保存临时模块令牌缓存({
+        token: token,
+        expire_at: !isNaN(parsedExpire) ? parsedExpire : (new Date().getTime() + 240 * 1000)
+    });
+
+    return {
+        token: token,
+        auth_mode: "temp_token"
+    };
+}
+
+function 生成随机NonceBase64(length) {
+    length = Math.max(16, parseInt(length) || 16);
+    let bytes = util.java.array("byte", length);
+    let random = new java.security.SecureRandom();
+    random.nextBytes(bytes);
+    return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
+}
+
+function 字符串转字节(str) {
+    return java.lang.String(String(str || "")).getBytes("UTF-8");
+}
+
+function 字节转十六进制(bytes) {
+    let sb = new java.lang.StringBuilder();
+    for (let i = 0; i < bytes.length; i++) {
+        let b = bytes[i];
+        if (b < 0) b += 256;
+        let hex = String(java.lang.Integer.toHexString(b));
+        if (hex.length == 1) sb.append("0");
+        sb.append(hex);
+    }
+    return String(sb.toString());
+}
+
+function 拼接字节(a, b) {
+    let out = new java.io.ByteArrayOutputStream();
+    if (a && a.length > 0) out.write(a, 0, a.length);
+    if (b && b.length > 0) out.write(b, 0, b.length);
+    return out.toByteArray();
+}
+
+function SHA256字节(bytes) {
+    let md = java.security.MessageDigest.getInstance("SHA-256");
+    md.update(bytes);
+    return md.digest();
+}
+
+function HMAC_SHA256(keyBytes, dataBytes) {
+    let mac = javax.crypto.Mac.getInstance("HmacSHA256");
+    let keySpec = new javax.crypto.spec.SecretKeySpec(keyBytes, "HmacSHA256");
+    mac.init(keySpec);
+    return mac.doFinal(dataBytes);
+}
+
+function HKDF_SHA256_32(ikm, saltBytes, infoBytes) {
+    let safeSalt = (saltBytes && saltBytes.length > 0) ? saltBytes : util.java.array("byte", 32);
+    let prk = HMAC_SHA256(safeSalt, ikm);
+    let counter = util.java.array("byte", 1);
+    counter[0] = 1;
+    let msg = 拼接字节(infoBytes || util.java.array("byte", 0), counter);
+    let t1 = HMAC_SHA256(prk, msg);
+    if (t1.length == 32) return t1;
+    let out = util.java.array("byte", 32);
+    java.lang.System.arraycopy(t1, 0, out, 0, 32);
+    return out;
+}
+
+function AES_GCM_解密(keyBytes, ivBytes, cipherBytes, tagBytes, aadBytes) {
+    let cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+    let keySpec = new javax.crypto.spec.SecretKeySpec(keyBytes, "AES");
+    let gcmSpec = new javax.crypto.spec.GCMParameterSpec(128, ivBytes);
+    cipher.init(javax.crypto.Cipher.DECRYPT_MODE, keySpec, gcmSpec);
+    if (aadBytes && aadBytes.length > 0) {
+        cipher.updateAAD(aadBytes);
+    }
+    let input = 拼接字节(cipherBytes, tagBytes);
+    return cipher.doFinal(input);
+}
+
+function 派生会话密钥(memberToken, appSecret, androidIdValue, clientNonce, serverNonce, leaseId) {
+    let baseSecretText = String(memberToken || "") + "|" + String(appSecret || "") + "|" + String(androidIdValue || "");
+    let baseSecret = SHA256字节(字符串转字节(baseSecretText));
+    let saltText = String(leaseId || "") + "|" + String(serverNonce || "") + "|" + String(clientNonce || "");
+    let salt = 字符串转字节(saltText);
+    let info = 字符串转字节("automation-module-session-v1");
+    return HKDF_SHA256_32(baseSecret, salt, info);
+}
+
+function 解密租约模块脚本(leaseData, memberToken, clientNonce) {
+    let crypto = (leaseData || {}).crypto || {};
+    if (!crypto.ciphertext || !crypto.iv || !crypto.tag || !crypto.wrapped_key || !crypto.wrapped_key_iv || !crypto.wrapped_key_tag || !crypto.aad) {
+        throw new Error("租约数据缺少加密字段");
+    }
+
+    let aadBytes = android.util.Base64.decode(String(crypto.aad || ""), android.util.Base64.NO_WRAP);
+    let wrappedCipher = android.util.Base64.decode(String(crypto.wrapped_key || ""), android.util.Base64.NO_WRAP);
+    let wrappedIv = android.util.Base64.decode(String(crypto.wrapped_key_iv || ""), android.util.Base64.NO_WRAP);
+    let wrappedTag = android.util.Base64.decode(String(crypto.wrapped_key_tag || ""), android.util.Base64.NO_WRAP);
+
+    let cipherBytes = android.util.Base64.decode(String(crypto.ciphertext || ""), android.util.Base64.NO_WRAP);
+    let ivBytes = android.util.Base64.decode(String(crypto.iv || ""), android.util.Base64.NO_WRAP);
+    let tagBytes = android.util.Base64.decode(String(crypto.tag || ""), android.util.Base64.NO_WRAP);
+
+    let appSecretCandidates = [];
+    [
+        自动化模块云端配置.automationSecret,
+        membershipAppSecret,
+        FETCH_API_CONFIG.secret
+    ].forEach(function (s) {
+        s = String(s || "").trim();
+        if (s && appSecretCandidates.indexOf(s) == -1) {
+            appSecretCandidates.push(s);
+        }
+    });
+
+    let lastError = "";
+    for (let i = 0; i < appSecretCandidates.length; i++) {
+        let appSecret = appSecretCandidates[i];
+        try {
+            let sessionKey = 派生会话密钥(
+                memberToken,
+                appSecret,
+                androidId,
+                clientNonce,
+                String(crypto.server_nonce || ""),
+                String(leaseData.lease_id || "")
+            );
+
+            let moduleKey = AES_GCM_解密(sessionKey, wrappedIv, wrappedCipher, wrappedTag, aadBytes);
+            let plainBytes = AES_GCM_解密(moduleKey, ivBytes, cipherBytes, tagBytes, aadBytes);
+            return String(new java.lang.String(plainBytes, "UTF-8"));
+        } catch (e) {
+            lastError = String(e);
+        }
+    }
+    throw new Error("模块解密失败: " + (lastError || "unknown"));
+}
+
+function 解析支持模块(items, appName) {
+    items = Array.isArray(items) ? items : [];
+    let target = String(appName || "").trim();
+    for (let i = 0; i < items.length; i++) {
+        let item = items[i] || {};
+        if (String(item.module_name || "").trim() == target) {
+            return item;
+        }
+    }
+    for (let i = 0; i < items.length; i++) {
+        let item = items[i] || {};
+        if (String(item.module_code || "").trim().toLowerCase() == target.toLowerCase()) {
+            return item;
+        }
+    }
+    return null;
+}
+
+function 提示缺少自动化模块(appName, detailText) {
+    let tipText = appName + " 暂不支持或云端模块不可用";
+    if (detailText) tipText += "\n" + detailText;
     toastLog(tipText);
     dialogs.build({
         title: "友情提示",
-        content: tipText + "\n\n模块路径：" + modulePath,
+        content: tipText,
         positive: "确定",
     }).show();
 }
@@ -3599,17 +3942,87 @@ function 创建自动化共享对象() {
 }
 
 function 加载自动化模块(appName) {
-    let modulePath = 获取自动化模块路径(appName);
-    if (!files.exists(modulePath)) {
+    最近模块加载错误 = "";
+
+    let tokenInfo = 获取模块访问令牌();
+    let moduleToken = tokenInfo.token;
+
+    let supportQuery = "source_app_code=" + encodeURIComponent(String(自动化模块云端配置.sourceAppCode || membershipAppCode || "IdBotAuto"))
+        + "&android_id=" + encodeURIComponent(String(androidId || ""))
+        + "&script_version=" + encodeURIComponent(String(自动化模块云端配置.scriptVersion || 当前版本号));
+
+    let supportResp = 请求模块GET("/automation/modules/support?" + supportQuery, moduleToken);
+    if (!supportResp.ok || !supportResp.data || supportResp.data.code !== 0) {
+        最近模块加载错误 = (supportResp.data && supportResp.data.message) || supportResp.error || "拉取模块支持列表失败";
+        throw new Error(最近模块加载错误);
+    }
+
+    let supportData = (supportResp.data || {}).data || {};
+    let moduleInfo = 解析支持模块(supportData.modules, appName);
+    if (!moduleInfo || moduleInfo.enabled !== true) {
+        最近模块加载错误 = "未找到平台模块: " + appName;
         return null;
     }
-    let source = String(files.read(modulePath) || "");
+
+    let cacheEntry = 读取模块缓存(moduleInfo.module_code, appName);
+    let latestVersion = String(moduleInfo.latest_version || "");
+    let source = "";
+    let fromCache = false;
+
+    if (模块缓存可用(cacheEntry, latestVersion)) {
+        source = String(cacheEntry.js_plain || "");
+        fromCache = true;
+    } else {
+        let clientNonce = 生成随机NonceBase64(16);
+        let leaseResp = 请求模块POST(
+            "/automation/modules/lease",
+            {
+                module_name: String(moduleInfo.module_name || appName),
+                module_code: String(moduleInfo.module_code || ""),
+                source_app_code: String(自动化模块云端配置.sourceAppCode || membershipAppCode || "IdBotAuto"),
+                android_id: String(androidId || ""),
+                script_version: String(自动化模块云端配置.scriptVersion || 当前版本号),
+                client_nonce: clientNonce
+            },
+            moduleToken
+        );
+
+        if (!leaseResp.ok || !leaseResp.data || leaseResp.data.code !== 0) {
+            最近模块加载错误 = (leaseResp.data && leaseResp.data.message) || leaseResp.error || "申请模块租约失败";
+            throw new Error(最近模块加载错误);
+        }
+
+        let leaseData = (leaseResp.data || {}).data || {};
+        source = 解密租约模块脚本(leaseData, moduleToken, clientNonce);
+        let now = new Date().getTime();
+        let cacheSeconds = Math.max(60, parseInt(自动化模块云端配置.cacheSeconds) || 600);
+        let expectedHash = String((((leaseData || {}).meta || {}).content_sha256) || "").trim().toLowerCase();
+        let actualHash = 字节转十六进制(SHA256字节(字符串转字节(source))).toLowerCase();
+        if (expectedHash && expectedHash != actualHash) {
+            throw new Error("模块哈希校验失败");
+        }
+
+        保存模块缓存(moduleInfo.module_code, appName, {
+            module_name: moduleInfo.module_name,
+            module_code: moduleInfo.module_code,
+            module_version: leaseData.module_version || latestVersion || "",
+            js_plain: source,
+            lease_expires_at: leaseData.expires_at || "",
+            cache_expire_at: now + cacheSeconds * 1000,
+            content_sha256: expectedHash || actualHash,
+            updated_at: now
+        });
+    }
+
     let factory = new Function("shared", source + "\nreturn typeof createAutomationAdapter === 'function' ? createAutomationAdapter(shared) : null;");
     let adapter = factory(创建自动化共享对象());
     if (!adapter || typeof adapter.executeTask != "function") {
-        throw new Error("自动化模块格式错误: " + modulePath);
+        throw new Error("云端自动化模块格式错误: " + appName);
     }
-    adapter.__modulePath = modulePath;
+
+    adapter.__modulePath = "memory://cloud/" + String(moduleInfo.module_code || appName) + ".js";
+    adapter.__loadedFromCache = fromCache;
+    adapter.__moduleVersion = latestVersion || (cacheEntry && cacheEntry.module_version) || "";
     return adapter;
 }
 
@@ -3685,7 +4098,17 @@ function 创建自动化上下文(appName, adapter) {
 }
 
 function 执行模块化自动化(appName) {
-    let adapter = 加载自动化模块(appName);
+    let adapter = null;
+    try {
+        adapter = 加载自动化模块(appName);
+    } catch (error) {
+        最近模块加载错误 = 最近模块加载错误 || String(error);
+        记录自动化日志("automation.module.load.error", {
+            appName: appName,
+            error: String(error)
+        }, "ERROR");
+        return false;
+    }
     if (!adapter) return false;
 
     let config = adapter.config || {};
@@ -3699,6 +4122,8 @@ function 执行模块化自动化(appName) {
     记录自动化日志("automation.module.loaded", {
         appName: appName,
         modulePath: adapter.__modulePath,
+        fromCache: adapter.__loadedFromCache === true,
+        moduleVersion: adapter.__moduleVersion,
         config: config
     }, "INFO");
 
@@ -3737,7 +4162,7 @@ function 主程序() {
 
         if (!执行模块化自动化(aimAPP)) {
             写作业统计结束状态 = "暂不支持"
-            提示缺少自动化模块(aimAPP)
+            提示缺少自动化模块(aimAPP, 最近模块加载错误)
             安全等待(3000)
             return
         }
@@ -5113,8 +5538,13 @@ function javaClass() {
     importClass("android.graphics.BitmapFactory");
     importClass(android.graphics.BitmapShader);
     importClass(android.view.View);
+    importClass(android.util.Base64);
+    importClass(java.security.MessageDigest);
+    importClass(java.security.SecureRandom);
     importClass(javax.crypto.Mac);
+    importClass(javax.crypto.Cipher);
     importClass(javax.crypto.spec.SecretKeySpec);
+    importClass(javax.crypto.spec.GCMParameterSpec);
 }
 
 function UI_layout_module() {
