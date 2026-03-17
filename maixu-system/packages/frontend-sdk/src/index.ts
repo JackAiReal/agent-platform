@@ -1,3 +1,4 @@
+import { createAuditApi } from './audit';
 import { createAuthApi } from './auth';
 import { createChallengesApi } from './challenges';
 import { ApiHttpClient, ApiTransport, createFetchTransport, createTaroTransport, MaixuSdkOptions } from './http';
@@ -26,6 +27,7 @@ export function createMaixuSdk(options: MaixuSdkOptions) {
     roomConfigs: createRoomConfigsApi(client),
     hostSchedules: createHostSchedulesApi(client),
     notifications: createNotificationsApi(client),
+    audit: createAuditApi(client),
   };
 }
 

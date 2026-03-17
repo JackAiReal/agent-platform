@@ -346,6 +346,18 @@ export interface NotificationLogVO {
   createdAt: string;
 }
 
+export interface AuditLogVO {
+  id: string;
+  roomId?: string;
+  roomSlotId?: string;
+  operatorUserId?: string;
+  action: string;
+  targetType?: string;
+  targetId?: string;
+  payload?: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface ApiErrorPayload {
   message?: string | string[];
   error?: string;

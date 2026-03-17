@@ -238,6 +238,11 @@ export default function HostDashboardPage() {
         <View className='subtitle'>总人数：{dashboard.summary.totalEntries}</View>
         <View className='subtitle'>用户池：{userOptions.length} 人</View>
         <View className='subtitle'>实时刷新：{wsConnected ? 'WebSocket 已连接' : '轮询兜底中'}</View>
+        <View className='btn-row action-group'>
+          <Button onClick={() => Taro.navigateTo({ url: `/pages/ops/management/index?slotId=${slotId}&roomId=${dashboard.room.id}` })}>
+            打开运营控制台
+          </Button>
+        </View>
       </View>
 
       <View className='card'>

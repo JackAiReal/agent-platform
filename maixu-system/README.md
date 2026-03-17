@@ -12,7 +12,7 @@
 - Audit（主持关键操作日志）
 - Room Configs + Host Schedules（配置可运营化）
 - Prisma schema + 初始 migration + seed
-- Taro 前端页面骨架（登录 / 房间列表 / 房间详情 / 主持台）
+- Taro 前端页面骨架（登录 / 房间列表 / 房间详情 / 主持台 / 运营控制台）
 - TypeScript Frontend SDK（fetch + taro transport）
 - WebSocket 实时刷新（房间详情页、主持台收到 `rank.updated` 与 `leave-notice.updated` 即时更新）
 

@@ -4,6 +4,7 @@ export default defineAppConfig({
     'pages/rooms/index/index',
     'pages/rooms/detail/index',
     'pages/host/dashboard/index',
+    'pages/ops/management/index',
   ],
   window: {
     backgroundTextStyle: 'light',
