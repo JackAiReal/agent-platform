@@ -32,7 +32,10 @@ export class SlotsRepository {
     const slotDate = getCurrentSlotDate();
     const slotHour = new Date().getHours();
 
-    const existing = await this.prisma.roomSlot.findUnique({
+    const config = buildRuntimeRoomConfig(room.configs);
+    const { startAt, speedCloseAt, finalCloseAt } = buildSlotTimes(slotDate, slotHour, config);
+
+    return this.prisma.roomSlot.upsert({
       where: {
         roomId_slotDate_slotHour: {
           roomId: room.id,
@@ -40,17 +43,8 @@ export class SlotsRepository {
           slotHour,
         },
       },
-    });
-
-    if (existing) {
-      return existing;
-    }
-
-    const config = buildRuntimeRoomConfig(room.configs);
-    const { startAt, speedCloseAt, finalCloseAt } = buildSlotTimes(slotDate, slotHour, config);
-
-    return this.prisma.roomSlot.create({
-      data: {
+      update: {},
+      create: {
         roomId: room.id,
         slotDate,
         slotHour,
