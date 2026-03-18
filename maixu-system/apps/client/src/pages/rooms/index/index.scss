@@ -1,71 +1,86 @@
-.wechat-page {
+.wechat-shell {
   min-height: 100vh;
   background: #ededed;
-  padding: 0 0 22px;
-  box-sizing: border-box;
-}
-
-.wechat-header {
-  background: #f6f6f6;
-  padding: 28px 24px 18px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #e5e7eb;
+  flex-direction: column;
 }
 
-.wechat-title {
+.wechat-nav {
+  height: 96px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.wechat-nav-title {
   font-size: 38px;
   font-weight: 700;
   color: #111827;
-  line-height: 1.2;
+  letter-spacing: 1px;
 }
 
-.wechat-subtitle {
-  margin-top: 6px;
-  font-size: 24px;
-  color: #6b7280;
+.wechat-nav-actions {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 16px;
 }
 
-.header-mini-btn {
-  font-size: 24px;
+.nav-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  border: 1px solid #e5e7eb;
 }
 
-.search-wrap {
-  background: #f6f6f6;
-  padding: 16px 24px 20px;
+.search-row {
+  background: #f5f5f5;
+  padding: 14px 20px 16px;
+  border-bottom: 1px solid #eceff3;
 }
 
 .search-input {
-  width: 100%;
-  height: 70px;
-  border-radius: 14px;
+  height: 72px;
+  border-radius: 12px;
   background: #fff;
   padding: 0 20px;
-  box-sizing: border-box;
   font-size: 26px;
 }
 
 .chat-list {
-  padding: 0 0 16px;
+  flex: 1;
+  overflow: auto;
 }
 
 .chat-item {
+  min-height: 118px;
   background: #fff;
+  border-bottom: 1px solid #eef1f3;
+  padding: 14px 20px;
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 18px 24px;
-  border-bottom: 1px solid #f1f5f9;
+  gap: 16px;
 }
 
 .chat-avatar {
-  width: 90px;
-  height: 90px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #34d399, #10b981);
+  width: 84px;
+  height: 84px;
+  border-radius: 12px;
+  background: linear-gradient(140deg, #4ade80, #16a34a);
   color: #fff;
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -74,67 +89,146 @@
 }
 
 .chat-main {
-  min-width: 0;
   flex: 1;
+  min-width: 0;
 }
 
-.chat-top-row {
+.chat-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  justify-content: space-between;
   gap: 12px;
 }
 
 .chat-name {
-  font-size: 30px;
-  color: #0f172a;
-  font-weight: 600;
-}
-
-.chat-time {
-  color: #9ca3af;
-  font-size: 22px;
-  flex-shrink: 0;
-}
-
-.chat-preview {
-  color: #64748b;
-  font-size: 24px;
+  font-size: 33px;
+  font-weight: 500;
+  color: #111827;
+  max-width: 420px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.chat-badge {
-  min-width: 40px;
-  padding: 4px 10px;
-  border-radius: 999px;
+.chat-time {
+  font-size: 22px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.chat-bottom {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chat-preview {
+  flex: 1;
+  font-size: 24px;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-mute {
+  color: #cbd5e1;
+  font-size: 24px;
+}
+
+.chat-unread {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 17px;
   background: #ef4444;
   color: #fff;
   font-size: 20px;
   text-align: center;
+  line-height: 34px;
+  flex-shrink: 0;
 }
 
-.chat-empty {
-  padding: 56px 24px;
+.empty-state {
+  padding: 68px 20px;
   text-align: center;
-  color: #94a3b8;
-  font-size: 24px;
+  color: #9ca3af;
+  font-size: 26px;
 }
 
-.footer-actions {
-  margin-top: 12px;
+.wechat-tabbar {
+  height: 110px;
+  background: #f5f5f5;
+  border-top: 1px solid #e5e7eb;
   display: flex;
-  justify-content: center;
-  gap: 14px;
+  align-items: center;
+  justify-content: space-around;
+  flex-shrink: 0;
 }
 
-.footer-btn {
-  font-size: 24px;
+.tab-item {
+  width: 25%;
+  text-align: center;
+  color: #64748b;
 }
 
-.footer-btn.ghost {
-  background: #e2e8f0;
-  color: #334155;
+.tab-item.active {
+  color: #22c55e;
+}
+
+.tab-icon {
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+.tab-label {
+  margin-top: 4px;
+  display: block;
+  font-size: 21px;
+}
+
+.context-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 99;
+}
+
+.context-menu {
+  width: 300px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.2);
+  position: absolute;
+  left: 50%;
+  top: 310px;
+  transform: translateX(-50%);
+  overflow: hidden;
+}
+
+.context-item {
+  height: 92px;
+  line-height: 92px;
+  padding: 0 26px;
+  font-size: 34px;
+  color: #1f2937;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+}
+
+.context-item:last-child {
+  border-bottom: none;
+}
+
+.context-item.danger {
+  color: #ef4444;
+}
+
+.whoami {
+  position: fixed;
+  left: 16px;
+  bottom: 116px;
+  font-size: 18px;
+  color: #9ca3af;
 }
