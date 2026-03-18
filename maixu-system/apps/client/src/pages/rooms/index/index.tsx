@@ -9,9 +9,10 @@ import './index.scss';
 
 type RoomUiFlags = {
   pinned?: boolean;
-  unread?: boolean;
+  manualUnread?: boolean;
   hidden?: boolean;
   deleted?: boolean;
+  deletedAt?: number;
 };
 
 const ROOM_UI_FLAGS_KEY = 'maixu_room_ui_flags';
@@ -32,9 +33,8 @@ function getRoomHash(room: RoomListItemVO) {
   return `${room.id}${room.name}`.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
 }
 
-function formatMessageTime() {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+function formatMessageTime(hour: number) {
+  return `${String(hour).padStart(2, '0')}:00`;
 }
 
 function buildDisplayName(room: RoomListItemVO) {
@@ -62,12 +62,17 @@ export default function RoomsPage() {
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [showHiddenRooms, setShowHiddenRooms] = useState(false);
   const [menuRoom, setMenuRoom] = useState<RoomListItemVO | null>(null);
   const [menuTop, setMenuTop] = useState(300);
   const [currentUser, setCurrentUserState] = useState<UserVO | undefined>(() => getCurrentUser<UserVO>());
   const [roomUiFlags, setRoomUiFlags] = useState<Record<string, RoomUiFlags>>(() => readRoomUiFlags());
 
-  const updateRoomUiFlags = (roomId: string, patch: RoomUiFlags) => {
+  const persistFlags = (next: Record<string, RoomUiFlags>) => {
+    Taro.setStorageSync(ROOM_UI_FLAGS_KEY, next);
+  };
+
+  const updateRoomUiFlags = (roomId: string, patch: Partial<RoomUiFlags>) => {
     setRoomUiFlags((prev) => {
       const next = {
         ...prev,
@@ -76,7 +81,15 @@ export default function RoomsPage() {
           ...patch,
         },
       };
-      Taro.setStorageSync(ROOM_UI_FLAGS_KEY, next);
+      persistFlags(next);
+      return next;
+    });
+  };
+
+  const updateFlagsBatch = (updater: (prev: Record<string, RoomUiFlags>) => Record<string, RoomUiFlags>) => {
+    setRoomUiFlags((prev) => {
+      const next = updater(prev);
+      persistFlags(next);
       return next;
     });
   };
@@ -107,28 +120,48 @@ export default function RoomsPage() {
     if (timerRef.current) clearInterval(timerRef.current);
   });
 
+  const hiddenCount = useMemo(
+    () => Object.values(roomUiFlags).filter((flag) => flag.hidden && !flag.deleted).length,
+    [roomUiFlags],
+  );
+
+  const deletedCount = useMemo(
+    () => Object.values(roomUiFlags).filter((flag) => flag.deleted).length,
+    [roomUiFlags],
+  );
+
   const filteredRooms = useMemo(() => {
     const q = keyword.trim().toLowerCase();
 
     return [...rooms]
       .filter((room) => {
-        const flag = roomUiFlags[room.id];
-        return !flag?.hidden && !flag?.deleted;
+        const flag = roomUiFlags[room.id] || {};
+        if (flag.deleted) return false;
+        if (!showHiddenRooms && flag.hidden) return false;
+        return true;
       })
       .filter((room) => {
         if (!q) return true;
         return `${room.name} ${room.description || ''}`.toLowerCase().includes(q);
       })
       .sort((a, b) => {
-        const pinA = roomUiFlags[a.id]?.pinned ? 1 : 0;
-        const pinB = roomUiFlags[b.id]?.pinned ? 1 : 0;
+        const flagA = roomUiFlags[a.id] || {};
+        const flagB = roomUiFlags[b.id] || {};
+
+        const pinA = flagA.pinned ? 1 : 0;
+        const pinB = flagB.pinned ? 1 : 0;
         if (pinA !== pinB) return pinB - pinA;
+
+        const hiddenA = flagA.hidden ? 1 : 0;
+        const hiddenB = flagB.hidden ? 1 : 0;
+        if (hiddenA !== hiddenB) return hiddenA - hiddenB;
+
         return b.currentRankCount - a.currentRankCount;
       });
-  }, [rooms, keyword, roomUiFlags]);
+  }, [rooms, keyword, roomUiFlags, showHiddenRooms]);
 
   const handleOpenRoom = (room: RoomListItemVO) => {
-    updateRoomUiFlags(room.id, { unread: false });
+    updateRoomUiFlags(room.id, { manualUnread: false });
     Taro.navigateTo({ url: `/pages/rooms/detail/index?roomId=${room.id}` });
   };
 
@@ -151,39 +184,103 @@ export default function RoomsPage() {
     const currentFlag = roomUiFlags[menuRoom.id] || {};
 
     if (action === 'unread') {
-      updateRoomUiFlags(menuRoom.id, { unread: !currentFlag.unread });
+      updateRoomUiFlags(menuRoom.id, { manualUnread: !currentFlag.manualUnread });
+      Taro.showToast({
+        title: currentFlag.manualUnread ? '已标为已读' : '已标为未读',
+        icon: 'none',
+      });
       closeMenu();
       return;
     }
 
     if (action === 'pin') {
       updateRoomUiFlags(menuRoom.id, { pinned: !currentFlag.pinned });
+      Taro.showToast({
+        title: currentFlag.pinned ? '已取消置顶' : '已置顶聊天',
+        icon: 'none',
+      });
       closeMenu();
       return;
     }
 
     if (action === 'hide') {
-      updateRoomUiFlags(menuRoom.id, { hidden: true });
+      updateRoomUiFlags(menuRoom.id, { hidden: !currentFlag.hidden });
+      Taro.showToast({
+        title: currentFlag.hidden ? '已恢复显示' : '已不显示该聊天',
+        icon: 'none',
+      });
       closeMenu();
       return;
     }
 
     const modal = await Taro.showModal({
       title: '删除该聊天',
-      content: `确认删除“${menuRoom.name}”吗？`,
+      content: `确认删除“${buildDisplayName(menuRoom)}”吗？`,
       confirmColor: '#ef4444',
     });
 
     if (!modal.confirm) return;
 
-    updateRoomUiFlags(menuRoom.id, { deleted: true });
+    updateRoomUiFlags(menuRoom.id, {
+      deleted: true,
+      hidden: false,
+      pinned: false,
+      manualUnread: false,
+      deletedAt: Date.now(),
+    });
+    Taro.showToast({ title: '已删除聊天', icon: 'none' });
     closeMenu();
   };
 
-  const handleHeaderMore = async () => {
-    const { tapIndex } = await Taro.showActionSheet({
-      itemList: ['刷新聊天列表', '打开运营台', '退出登录'],
+  const restoreHiddenChats = () => {
+    updateFlagsBatch((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((roomId) => {
+        if (next[roomId]?.hidden) {
+          next[roomId] = { ...next[roomId], hidden: false };
+        }
+      });
+      return next;
     });
+    Taro.showToast({ title: '已恢复隐藏聊天', icon: 'none' });
+  };
+
+  const restoreLatestDeleted = () => {
+    let latestRoomId = '';
+    let latestDeletedAt = 0;
+
+    Object.entries(roomUiFlags).forEach(([roomId, flag]) => {
+      if (!flag.deleted) return;
+      const deletedAt = flag.deletedAt || 0;
+      if (deletedAt >= latestDeletedAt) {
+        latestDeletedAt = deletedAt;
+        latestRoomId = roomId;
+      }
+    });
+
+    if (!latestRoomId) {
+      Taro.showToast({ title: '暂无可恢复聊天', icon: 'none' });
+      return;
+    }
+
+    updateRoomUiFlags(latestRoomId, {
+      deleted: false,
+      deletedAt: undefined,
+    });
+    Taro.showToast({ title: '已恢复最近删除聊天', icon: 'none' });
+  };
+
+  const handleHeaderMore = async () => {
+    const itemList = [
+      '刷新聊天列表',
+      showHiddenRooms ? '隐藏已隐藏聊天' : '显示已隐藏聊天',
+      hiddenCount ? '恢复全部隐藏聊天' : '无隐藏聊天',
+      deletedCount ? '恢复最近删除聊天' : '无删除聊天',
+      '打开运营台',
+      '退出登录',
+    ];
+
+    const { tapIndex } = await Taro.showActionSheet({ itemList });
 
     if (tapIndex === 0) {
       loadRooms();
@@ -191,11 +288,34 @@ export default function RoomsPage() {
     }
 
     if (tapIndex === 1) {
-      Taro.navigateTo({ url: '/pages/ops/management/index' });
+      setShowHiddenRooms((prev) => !prev);
       return;
     }
 
     if (tapIndex === 2) {
+      if (!hiddenCount) {
+        Taro.showToast({ title: '暂无隐藏聊天', icon: 'none' });
+        return;
+      }
+      restoreHiddenChats();
+      return;
+    }
+
+    if (tapIndex === 3) {
+      if (!deletedCount) {
+        Taro.showToast({ title: '暂无删除聊天', icon: 'none' });
+        return;
+      }
+      restoreLatestDeleted();
+      return;
+    }
+
+    if (tapIndex === 4) {
+      Taro.navigateTo({ url: '/pages/ops/management/index' });
+      return;
+    }
+
+    if (tapIndex === 5) {
       clearSession();
       Taro.redirectTo({ url: '/pages/auth/login/index' });
     }
@@ -225,11 +345,11 @@ export default function RoomsPage() {
       <View className='chat-list'>
         {filteredRooms.map((room) => {
           const roomFlag = roomUiFlags[room.id] || {};
-          const unreadCount = roomFlag.unread ? 1 : room.currentRankCount;
+          const unreadCount = room.currentRankCount > 0 ? room.currentRankCount : roomFlag.manualUnread ? 1 : 0;
 
           return (
             <View
-              className='chat-item'
+              className={`chat-item ${roomFlag.pinned ? 'is-pinned' : ''} ${roomFlag.hidden ? 'is-hidden' : ''}`}
               key={room.id}
               onClick={() => handleOpenRoom(room)}
               onLongPress={(e) => handleLongPressRoom(room, e)}
@@ -240,21 +360,17 @@ export default function RoomsPage() {
                     <Text className='avatar-emoji'>{getAvatarEmoji(room, cell)}</Text>
                   </View>
                 ))}
-                {unreadCount > 0 ? (
-                  <View className='avatar-dot'>{unreadCount > 9 ? '9+' : ''}</View>
-                ) : null}
+                {unreadCount > 0 ? <View className='avatar-dot'>{unreadCount > 99 ? '99+' : unreadCount}</View> : null}
               </View>
 
               <View className='chat-main'>
                 <View className='chat-top'>
                   <View className='chat-title-wrap'>
-                    <Text className='chat-name'>
-                      {roomFlag.pinned ? '📌 ' : ''}
-                      {buildDisplayName(room)}
-                    </Text>
+                    <Text className='chat-name'>{buildDisplayName(room)}</Text>
                     <Text className='chat-ban'>禁闲聊</Text>
+                    {roomFlag.hidden ? <Text className='chat-tag-muted'>已隐藏</Text> : null}
                   </View>
-                  <Text className='chat-time'>{formatMessageTime()}</Text>
+                  <Text className='chat-time'>{formatMessageTime(room.currentSlot.slotHour)}</Text>
                 </View>
 
                 <View className='chat-bottom'>
@@ -270,7 +386,7 @@ export default function RoomsPage() {
 
         {!filteredRooms.length ? (
           <View className='empty-state'>
-            <Text>没有聊天记录</Text>
+            <Text>{showHiddenRooms ? '暂无已隐藏聊天' : '没有聊天记录'}</Text>
           </View>
         ) : null}
       </View>
@@ -279,10 +395,6 @@ export default function RoomsPage() {
         <View className='tab-item active'>
           <View className='tab-icon'>💬</View>
           <Text className='tab-label'>微信</Text>
-        </View>
-        <View className='tab-item'>
-          <View className='tab-icon'>👥</View>
-          <Text className='tab-label'>通讯录</Text>
         </View>
         <View className='tab-item'>
           <View className='tab-icon'>🧭</View>
@@ -298,13 +410,16 @@ export default function RoomsPage() {
         <View className='context-mask' onClick={closeMenu} catchMove>
           <View className='context-menu' style={{ top: `${menuTop}px` }} onClick={(e) => e.stopPropagation()}>
             <View className='context-item' onClick={() => handleMenuAction('unread')}>
-              {roomUiFlags[menuRoom.id]?.unread ? '标为已读' : '标为未读'}
+              {roomUiFlags[menuRoom.id]?.manualUnread ? '标为已读' : '标为未读'}
             </View>
             <View className='context-item' onClick={() => handleMenuAction('pin')}>
               {roomUiFlags[menuRoom.id]?.pinned ? '取消置顶' : '置顶该聊天'}
             </View>
-            <View className='context-item' onClick={() => handleMenuAction('hide')}>不显示该聊天</View>
+            <View className='context-item' onClick={() => handleMenuAction('hide')}>
+              {roomUiFlags[menuRoom.id]?.hidden ? '取消不显示' : '不显示该聊天'}
+            </View>
             <View className='context-item danger' onClick={() => handleMenuAction('delete')}>删除该聊天</View>
+            <View className='context-item cancel' onClick={closeMenu}>取消</View>
           </View>
         </View>
       ) : null}
