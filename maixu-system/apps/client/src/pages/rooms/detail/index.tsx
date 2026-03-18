@@ -240,6 +240,7 @@ export default function RoomDetailPage() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [scrollIntoView, setScrollIntoView] = useState('');
+  const [scrollTop, setScrollTop] = useState(0);
   const [composer, setComposer] = useState('');
   const [inputLineCount, setInputLineCount] = useState(1);
   const [rawInputLineCount, setRawInputLineCount] = useState(1);
@@ -278,6 +279,13 @@ export default function RoomDetailPage() {
     });
   };
 
+  const scrollToBottom = (targetId?: string) => {
+    if (targetId) {
+      setScrollIntoView(targetId);
+    }
+    setScrollTop((prev) => prev + 10000);
+  };
+
   const pushMessage = (role: ChatRole, text: string, senderName?: string) => {
     const nextMessage: ChatMessage = {
       id: createId(),
@@ -288,7 +296,11 @@ export default function RoomDetailPage() {
     };
 
     setAndPersistMessages((prev) => [...prev, nextMessage]);
-    setScrollIntoView(nextMessage.id);
+    scrollToBottom(nextMessage.id);
+
+    if (role !== 'self' && initializedRef.current) {
+      setHistoryBadgeCount((prev) => prev + 1);
+    }
   };
 
   const markConversationRead = () => {
@@ -381,12 +393,14 @@ export default function RoomDetailPage() {
     const cachedMessages = loadCachedMessages(activeRoomId);
     setMessages(cachedMessages);
     if (cachedMessages.length) {
-      setScrollIntoView(cachedMessages[cachedMessages.length - 1].id);
+      const lastId = cachedMessages[cachedMessages.length - 1].id;
+      setTimeout(() => {
+        scrollToBottom(lastId);
+      }, 30);
     }
 
     const unreadCount = cachedMessages.filter((item) => item.role !== 'self' && item.createdAt > loadLastReadAt(activeRoomId)).length;
-    const badgeCount = cachedMessages.length ? Math.max(unreadCount, cachedMessages.length) : 0;
-    setHistoryBadgeCount(badgeCount);
+    setHistoryBadgeCount(unreadCount);
 
     requireLogin(`/pages/rooms/detail/index?roomId=${activeRoomId}`).then(async (user) => {
       if (!user) return;
@@ -444,7 +458,6 @@ export default function RoomDetailPage() {
     if (timerRef.current) clearInterval(timerRef.current);
     wsCleanupRef.current?.();
     wsCleanupRef.current = null;
-    markConversationRead();
   });
 
   const ensureChallengeTicketSilently = async () => {
@@ -700,6 +713,7 @@ export default function RoomDetailPage() {
         showScrollbar={false}
         scrollWithAnimation
         scrollIntoView={scrollIntoView}
+        scrollTop={scrollTop}
       >
         {messages.map((message) => {
           if (message.role === 'time') {
