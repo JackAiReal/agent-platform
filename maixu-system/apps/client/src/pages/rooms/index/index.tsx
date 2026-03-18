@@ -15,6 +15,8 @@ type RoomUiFlags = {
 };
 
 const ROOM_UI_FLAGS_KEY = 'maixu_room_ui_flags';
+const AVATAR_CELLS = Array.from({ length: 9 }, (_, index) => index);
+const AVATAR_EMOJIS = ['🌌', '🏞️', '🎧', '🛰️', '🌙', '🍃', '🧊', '☄️', '🎵', '🪐', '📷', '🐾'];
 
 function readRoomUiFlags(): Record<string, RoomUiFlags> {
   try {
@@ -26,15 +28,31 @@ function readRoomUiFlags(): Record<string, RoomUiFlags> {
   return {};
 }
 
-function formatSlotTime(hour: number) {
-  return `${String(hour).padStart(2, '0')}:00`;
+function getRoomHash(room: RoomListItemVO) {
+  return `${room.id}${room.name}`.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
 }
 
-function buildRoomPreview(room: RoomListItemVO) {
-  if (room.currentRankCount > 0) {
-    return `麦序机器人：当前 ${room.currentRankCount} 人排麦，发“排麦 手速”即可上麦`;
-  }
-  return '麦序机器人：当前空麦，发“排麦 手速”开始排麦';
+function formatMessageTime() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
+function buildDisplayName(room: RoomListItemVO) {
+  const roomName = room.name.trim();
+  if (/排麦/.test(roomName)) return roomName;
+  return `${roomName}排麦群`;
+}
+
+function buildAnnouncement(room: RoomListItemVO) {
+  const slotHour = room.currentSlot.slotHour;
+  const endHour = (slotHour + 1) % 24;
+  const rankText = room.currentRankCount > 0 ? `当前排麦 ${room.currentRankCount} 人` : '当前空麦可直接报名';
+  return `${rankText} 时间：${slotHour} - ${endHour}`;
+}
+
+function getAvatarEmoji(room: RoomListItemVO, index: number) {
+  const hash = getRoomHash(room);
+  return AVATAR_EMOJIS[(hash + index * 7) % AVATAR_EMOJIS.length];
 }
 
 export default function RoomsPage() {
@@ -45,6 +63,7 @@ export default function RoomsPage() {
   const [keyword, setKeyword] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [menuRoom, setMenuRoom] = useState<RoomListItemVO | null>(null);
+  const [menuTop, setMenuTop] = useState(300);
   const [currentUser, setCurrentUserState] = useState<UserVO | undefined>(() => getCurrentUser<UserVO>());
   const [roomUiFlags, setRoomUiFlags] = useState<Record<string, RoomUiFlags>>(() => readRoomUiFlags());
 
@@ -113,7 +132,12 @@ export default function RoomsPage() {
     Taro.navigateTo({ url: `/pages/rooms/detail/index?roomId=${room.id}` });
   };
 
-  const handleLongPressRoom = (room: RoomListItemVO) => {
+  const handleLongPressRoom = (room: RoomListItemVO, event: unknown) => {
+    const touch = (event as { changedTouches?: Array<{ clientY?: number; pageY?: number }> })?.changedTouches?.[0];
+    const y = touch?.clientY || touch?.pageY || 300;
+    const { windowHeight } = Taro.getSystemInfoSync();
+
+    setMenuTop(Math.max(150, Math.min(y - 80, windowHeight - 420)));
     setMenuRoom(room);
   };
 
@@ -183,7 +207,7 @@ export default function RoomsPage() {
         <View className='wechat-nav-title'>微信</View>
         <View className='wechat-nav-actions'>
           <View className='nav-icon' onClick={() => setShowSearch((prev) => !prev)}>⌕</View>
-          <View className='nav-icon' onClick={handleHeaderMore}>＋</View>
+          <View className='nav-icon' onClick={handleHeaderMore}>{loading ? '…' : '＋'}</View>
         </View>
       </View>
 
@@ -208,26 +232,38 @@ export default function RoomsPage() {
               className='chat-item'
               key={room.id}
               onClick={() => handleOpenRoom(room)}
-              onLongPress={() => handleLongPressRoom(room)}
+              onLongPress={(e) => handleLongPressRoom(room, e)}
             >
-              <View className='chat-avatar'>{room.name.slice(0, 1)}</View>
+              <View className='chat-avatar-grid'>
+                {AVATAR_CELLS.map((cell) => (
+                  <View className='avatar-cell' key={cell}>
+                    <Text className='avatar-emoji'>{getAvatarEmoji(room, cell)}</Text>
+                  </View>
+                ))}
+                {unreadCount > 0 ? (
+                  <View className='avatar-dot'>{unreadCount > 9 ? '9+' : ''}</View>
+                ) : null}
+              </View>
 
               <View className='chat-main'>
                 <View className='chat-top'>
-                  <Text className='chat-name'>
-                    {roomFlag.pinned ? '📌 ' : ''}
-                    {room.name}
-                  </Text>
-                  <Text className='chat-time'>{formatSlotTime(room.currentSlot.slotHour)}</Text>
+                  <View className='chat-title-wrap'>
+                    <Text className='chat-name'>
+                      {roomFlag.pinned ? '📌 ' : ''}
+                      {buildDisplayName(room)}
+                    </Text>
+                    <Text className='chat-ban'>禁闲聊</Text>
+                  </View>
+                  <Text className='chat-time'>{formatMessageTime()}</Text>
                 </View>
 
                 <View className='chat-bottom'>
-                  <Text className='chat-preview'>{buildRoomPreview(room)}</Text>
-                  {room.currentRankCount === 0 ? <Text className='chat-mute'>🔕</Text> : null}
+                  <Text className='chat-notice-tag'>[群公告]</Text>
+                  <Text className='chat-preview'>{buildAnnouncement(room)}</Text>
                 </View>
               </View>
 
-              {unreadCount > 0 ? <View className='chat-unread'>{Math.min(unreadCount, 99)}</View> : null}
+              <View className='chat-right-icon'>🔕</View>
             </View>
           );
         })}
@@ -260,9 +296,9 @@ export default function RoomsPage() {
 
       {menuRoom ? (
         <View className='context-mask' onClick={closeMenu} catchMove>
-          <View className='context-menu' onClick={(e) => e.stopPropagation()}>
+          <View className='context-menu' style={{ top: `${menuTop}px` }} onClick={(e) => e.stopPropagation()}>
             <View className='context-item' onClick={() => handleMenuAction('unread')}>
-              {(roomUiFlags[menuRoom.id]?.unread ? '标为已读' : '标为未读')}
+              {roomUiFlags[menuRoom.id]?.unread ? '标为已读' : '标为未读'}
             </View>
             <View className='context-item' onClick={() => handleMenuAction('pin')}>
               {roomUiFlags[menuRoom.id]?.pinned ? '取消置顶' : '置顶该聊天'}

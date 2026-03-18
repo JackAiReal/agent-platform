@@ -7,8 +7,8 @@
 
 .wechat-nav {
   height: 96px;
-  background: #f5f5f5;
-  border-bottom: 1px solid #e5e7eb;
+  background: #f3f3f3;
+  border-bottom: 1px solid #e6e8eb;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -18,44 +18,43 @@
 
 .wechat-nav-title {
   font-size: 38px;
-  font-weight: 700;
-  color: #111827;
-  letter-spacing: 1px;
+  font-weight: 600;
+  color: #101828;
 }
 
 .wechat-nav-actions {
   position: absolute;
-  right: 24px;
+  right: 20px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
-  gap: 16px;
+  gap: 12px;
 }
 
 .nav-icon {
   width: 52px;
   height: 52px;
-  border-radius: 50%;
-  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e3e6ea;
+  background: #fff;
   color: #0f172a;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 30px;
-  border: 1px solid #e5e7eb;
 }
 
 .search-row {
-  background: #f5f5f5;
-  padding: 14px 20px 16px;
-  border-bottom: 1px solid #eceff3;
+  background: #f3f3f3;
+  padding: 14px 20px;
+  border-bottom: 1px solid #ebedf0;
 }
 
 .search-input {
-  height: 72px;
-  border-radius: 12px;
+  height: 68px;
+  border-radius: 10px;
   background: #fff;
-  padding: 0 20px;
+  padding: 0 18px;
   font-size: 26px;
 }
 
@@ -65,27 +64,55 @@
 }
 
 .chat-item {
-  min-height: 118px;
+  min-height: 132px;
   background: #fff;
-  border-bottom: 1px solid #eef1f3;
-  padding: 14px 20px;
+  border-bottom: 1px solid #f0f2f5;
+  padding: 18px 20px;
   display: flex;
   align-items: center;
   gap: 16px;
 }
 
-.chat-avatar {
-  width: 84px;
-  height: 84px;
-  border-radius: 12px;
-  background: linear-gradient(140deg, #4ade80, #16a34a);
-  color: #fff;
-  font-size: 32px;
-  font-weight: 700;
+.chat-avatar-grid {
+  width: 88px;
+  height: 88px;
+  border-radius: 10px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 2px;
+  background: #d1d5db;
+  padding: 2px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.avatar-cell {
+  background: linear-gradient(140deg, #dbeafe, #e2e8f0);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+}
+
+.avatar-emoji {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.avatar-dot {
+  position: absolute;
+  right: -7px;
+  top: -7px;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  padding: 0 6px;
+  background: #fb2c36;
+  color: #fff;
+  font-size: 16px;
+  line-height: 24px;
+  text-align: center;
 }
 
 .chat-main {
@@ -95,63 +122,74 @@
 
 .chat-top {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.chat-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .chat-name {
-  font-size: 33px;
-  font-weight: 500;
+  font-size: 34px;
   color: #111827;
-  max-width: 420px;
+  font-weight: 500;
+  max-width: 380px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.chat-time {
-  font-size: 22px;
-  color: #9ca3af;
+.chat-ban {
+  font-size: 24px;
+  color: #111827;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  padding: 2px 8px;
+  border-radius: 8px;
   flex-shrink: 0;
+}
+
+.chat-time {
+  color: #9ca3af;
+  font-size: 22px;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .chat-bottom {
   margin-top: 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+}
+
+.chat-notice-tag {
+  color: #b91c1c;
+  font-size: 24px;
+  flex-shrink: 0;
 }
 
 .chat-preview {
-  flex: 1;
+  color: #9aa1ab;
   font-size: 24px;
-  color: #94a3b8;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.chat-mute {
-  color: #cbd5e1;
-  font-size: 24px;
-}
-
-.chat-unread {
-  min-width: 34px;
-  height: 34px;
-  padding: 0 8px;
-  border-radius: 17px;
-  background: #ef4444;
-  color: #fff;
-  font-size: 20px;
-  text-align: center;
-  line-height: 34px;
-  flex-shrink: 0;
+.chat-right-icon {
+  color: #c5cad1;
+  font-size: 28px;
+  margin-left: 6px;
 }
 
 .empty-state {
-  padding: 68px 20px;
+  padding: 80px 20px;
   text-align: center;
   color: #9ca3af;
   font-size: 26px;
@@ -159,8 +197,8 @@
 
 .wechat-tabbar {
   height: 110px;
-  background: #f5f5f5;
-  border-top: 1px solid #e5e7eb;
+  background: #f3f3f3;
+  border-top: 1px solid #e4e7eb;
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -170,11 +208,11 @@
 .tab-item {
   width: 25%;
   text-align: center;
-  color: #64748b;
+  color: #687180;
 }
 
 .tab-item.active {
-  color: #22c55e;
+  color: #16a34a;
 }
 
 .tab-icon {
@@ -196,25 +234,22 @@
 }
 
 .context-menu {
-  width: 300px;
+  width: 320px;
   background: #fff;
   border-radius: 8px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.22);
   position: absolute;
-  left: 50%;
-  top: 310px;
-  transform: translateX(-50%);
+  right: 28px;
   overflow: hidden;
 }
 
 .context-item {
-  height: 92px;
-  line-height: 92px;
-  padding: 0 26px;
-  font-size: 34px;
-  color: #1f2937;
+  height: 90px;
+  line-height: 90px;
+  padding: 0 24px;
+  font-size: 30px;
+  color: #111827;
   border-bottom: 1px solid #f1f5f9;
-  background: #fff;
 }
 
 .context-item:last-child {
@@ -227,8 +262,8 @@
 
 .whoami {
   position: fixed;
-  left: 16px;
+  left: 14px;
   bottom: 116px;
   font-size: 18px;
-  color: #9ca3af;
+  color: #a2aab5;
 }
