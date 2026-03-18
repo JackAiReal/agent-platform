@@ -217,6 +217,12 @@
   flex-shrink: 0;
 }
 
+.composer-circle.active {
+  border-color: #07c160;
+  color: #07c160;
+  background: #edfdf3;
+}
+
 .composer-circle.plus {
   font-size: 42px;
   line-height: 1;
@@ -228,15 +234,15 @@
 
 .composer-input {
   flex: 1;
-  min-height: 60px;
-  max-height: 140px;
+  min-height: 44px;
+  max-height: 112px;
   border-radius: 8px;
   border: 1px solid #d6dbe1;
   background: #fff;
-  padding: 10px 14px;
+  padding: 6px 12px;
   box-sizing: border-box;
-  font-size: 30px;
-  line-height: 1.35;
+  font-size: 28px;
+  line-height: 34px;
   overflow-y: auto;
 }
 

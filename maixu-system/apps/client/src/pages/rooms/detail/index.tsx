@@ -28,7 +28,6 @@ type PlusPanelItem = {
 
 const BOT_NAME = '爱看看';
 const HISTORY_LIMIT = 8;
-const UNREAD_PILL_THRESHOLD = 20;
 const MAX_CHAT_MESSAGES = 300;
 
 const SCORE_MAP: Record<string, number> = {
@@ -217,7 +216,7 @@ function saveLastReadAt(roomId: string, timestamp: number) {
 function calcInputLines(text: string) {
   if (!text) return 1;
   const hardLines = text.split('\n');
-  const estimated = hardLines.reduce((total, line) => total + Math.max(1, Math.ceil(line.length / 18)), 0);
+  const estimated = hardLines.reduce((total, line) => total + Math.max(1, Math.ceil(line.length / 22)), 0);
   return Math.min(3, Math.max(1, estimated));
 }
 
@@ -245,17 +244,24 @@ export default function RoomDetailPage() {
   const [inputLineCount, setInputLineCount] = useState(1);
   const [sending, setSending] = useState(false);
 
-  const [unreadEntryCount, setUnreadEntryCount] = useState(0);
+  const [historyBadgeCount, setHistoryBadgeCount] = useState(0);
   const [bottomPanel, setBottomPanel] = useState<BottomPanelType>(null);
   const [recentCommands, setRecentCommands] = useState<string[]>([]);
 
   const hasInputText = useMemo(() => composer.trim().length > 0, [composer]);
+  const isHistoryPanelOpen = bottomPanel === 'history';
+  const isPlusPanelOpen = bottomPanel === 'plus';
 
   const titleText = useMemo(() => {
     if (!room) return '排麦群';
     const count = memberCount || 1;
     return `${room.name}排麦群🚫闲聊(${count})`;
   }, [room, memberCount]);
+
+  const composerHeight = useMemo(() => {
+    const next = inputLineCount * 34 + 10;
+    return Math.min(112, Math.max(44, next));
+  }, [inputLineCount]);
 
   const persistMessages = (list: ChatMessage[]) => {
     const activeRoomId = roomIdRef.current;
@@ -288,7 +294,7 @@ export default function RoomDetailPage() {
     const activeRoomId = roomIdRef.current;
     if (!activeRoomId) return;
     saveLastReadAt(activeRoomId, Date.now());
-    setUnreadEntryCount(0);
+    setHistoryBadgeCount(0);
   };
 
   const maybePushTimeDivider = () => {
@@ -378,7 +384,8 @@ export default function RoomDetailPage() {
     }
 
     const unreadCount = cachedMessages.filter((item) => item.role !== 'self' && item.createdAt > loadLastReadAt(activeRoomId)).length;
-    setUnreadEntryCount(unreadCount >= UNREAD_PILL_THRESHOLD ? unreadCount : 0);
+    const badgeCount = cachedMessages.length ? Math.max(unreadCount, cachedMessages.length) : 0;
+    setHistoryBadgeCount(badgeCount);
 
     requireLogin(`/pages/rooms/detail/index?roomId=${activeRoomId}`).then(async (user) => {
       if (!user) return;
@@ -693,8 +700,8 @@ export default function RoomDetailPage() {
         <Text className='notice-text'>{announcement}</Text>
       </View>
 
-      {unreadEntryCount >= UNREAD_PILL_THRESHOLD ? (
-        <View className='new-msg-pill' onClick={handleUnreadPillClick}>⌃ {unreadEntryCount} 条新消息</View>
+      {historyBadgeCount > 0 ? (
+        <View className='new-msg-pill' onClick={handleUnreadPillClick}>⌃ {historyBadgeCount} 条新消息</View>
       ) : null}
 
       <ScrollView
@@ -749,6 +756,10 @@ export default function RoomDetailPage() {
             setComposer(next);
             setInputLineCount(calcInputLines(next));
           }}
+          onLineChange={(e) => {
+            const lineCount = Number((e as { detail?: { lineCount?: number } })?.detail?.lineCount || 1);
+            setInputLineCount(Math.min(3, Math.max(1, lineCount)));
+          }}
           onConfirm={() => handleSend()}
           maxlength={500}
           showConfirmBar={false}
@@ -756,7 +767,7 @@ export default function RoomDetailPage() {
           fixed
           cursorSpacing={20}
           placeholder='发消息'
-          style={{ height: `${inputLineCount * 40 + 20}px` }}
+          style={{ height: `${composerHeight}px` }}
           onFocus={() => setBottomPanel(null)}
         />
 
@@ -766,13 +777,17 @@ export default function RoomDetailPage() {
           </View>
         ) : (
           <>
-            <View className='composer-circle history' onClick={handleHistoryButton}>⏱</View>
-            <View className='composer-circle plus' onClick={handlePlusButton}>＋</View>
+            <View className={`composer-circle history ${isHistoryPanelOpen ? 'active' : ''}`} onClick={handleHistoryButton}>
+              {isHistoryPanelOpen ? '⌃' : '⏱'}
+            </View>
+            <View className={`composer-circle plus ${isPlusPanelOpen ? 'active' : ''}`} onClick={handlePlusButton}>
+              {isPlusPanelOpen ? '✕' : '＋'}
+            </View>
           </>
         )}
       </View>
 
-      {bottomPanel === 'history' ? (
+      {isHistoryPanelOpen ? (
         <View className='bottom-panel history-panel'>
           <View className='history-title'>最近发送</View>
           {recentCommands.length ? (
@@ -787,7 +802,7 @@ export default function RoomDetailPage() {
         </View>
       ) : null}
 
-      {bottomPanel === 'plus' ? (
+      {isPlusPanelOpen ? (
         <View className='bottom-panel plus-panel'>
           <View className='plus-grid'>
             {PLUS_PANEL_ITEMS.map((item) => (
