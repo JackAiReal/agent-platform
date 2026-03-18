@@ -1,8 +1,11 @@
 .wechat-chat-page {
-  height: 100vh;
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
   background: #e8e8e8;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .wechat-loading {
@@ -19,6 +22,7 @@
   align-items: center;
   padding: 0 14px;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .chat-back {
@@ -36,7 +40,7 @@
 }
 
 .chat-title {
-  font-size: 38px;
+  font-size: 36px;
   color: #111827;
   font-weight: 600;
   overflow: hidden;
@@ -57,24 +61,8 @@
   color: #111827;
 }
 
-.top-dot-btn {
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
-  line-height: 44px;
-  border: none;
-  background: transparent;
-  color: #111827;
-  font-size: 34px;
-  padding: 0;
-}
-
-.top-dot-btn::after {
-  border: none;
-}
-
 .chat-notice {
-  margin: 12px 12px 10px;
+  margin: 12px 12px 8px;
   height: 68px;
   border-radius: 14px;
   background: #f7f7f7;
@@ -84,6 +72,7 @@
   gap: 8px;
   padding: 0 14px;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .notice-icon {
@@ -116,19 +105,22 @@
   text-align: center;
   padding: 0 12px;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .chat-scroll {
   flex: 1;
-  padding: 0 12px 12px;
+  min-height: 0;
+  padding: 0 12px 10px;
   box-sizing: border-box;
+  overscroll-behavior: contain;
 }
 
 .msg-time {
   text-align: center;
   color: #8f96a0;
   font-size: 28px;
-  margin: 14px 0;
+  margin: 12px 0;
 }
 
 .msg-row {
@@ -136,6 +128,10 @@
   align-items: flex-start;
   gap: 10px;
   margin-bottom: 16px;
+}
+
+.msg-row.self {
+  justify-content: flex-end;
 }
 
 .msg-avatar {
@@ -156,8 +152,17 @@
   background: linear-gradient(140deg, #a7f3d0, #86efac);
 }
 
+.msg-avatar.self {
+  background: linear-gradient(140deg, #93c5fd, #60a5fa);
+}
+
 .msg-main {
-  max-width: calc(100% - 90px);
+  max-width: calc(100% - 96px);
+}
+
+.msg-main.self {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .msg-name {
@@ -172,6 +177,10 @@
   border-radius: 10px;
   padding: 12px 16px;
   box-shadow: 0 2px 0 rgba(15, 23, 42, 0.03);
+}
+
+.msg-bubble.self {
+  background: #95ec69;
 }
 
 .msg-text {
@@ -212,8 +221,8 @@
   line-height: 1;
 }
 
-.composer-circle.disabled {
-  opacity: 0.55;
+.composer-circle.history {
+  font-size: 30px;
 }
 
 .composer-input {
@@ -225,4 +234,121 @@
   padding: 0 14px;
   box-sizing: border-box;
   font-size: 30px;
+}
+
+.send-btn {
+  min-width: 88px;
+  height: 56px;
+  line-height: 56px;
+  text-align: center;
+  border-radius: 8px;
+  background: #07c160;
+  color: #fff;
+  font-size: 26px;
+  padding: 0 14px;
+}
+
+.send-btn.disabled {
+  opacity: 0.5;
+}
+
+.history-panel {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 102px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  padding: 12px;
+  z-index: 30;
+}
+
+.history-title {
+  font-size: 24px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.history-item {
+  min-height: 56px;
+  border-radius: 8px;
+  background: #f8fafc;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  font-size: 28px;
+  color: #111827;
+  display: flex;
+  align-items: center;
+}
+
+.history-item:last-child {
+  margin-bottom: 0;
+}
+
+.history-empty {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-size: 24px;
+}
+
+.plus-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 92px;
+  background: #efefef;
+  border-top: 1px solid #dde2e8;
+  padding: 22px 18px 14px;
+  z-index: 28;
+}
+
+.plus-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 22px 18px;
+}
+
+.plus-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.plus-icon {
+  width: 100px;
+  height: 100px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44px;
+}
+
+.plus-label {
+  margin-top: 10px;
+  font-size: 26px;
+  color: #4b5563;
+}
+
+.plus-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.dot {
+  font-size: 18px;
+  color: #cbd5e1;
+}
+
+.dot.active {
+  color: #6b7280;
 }
