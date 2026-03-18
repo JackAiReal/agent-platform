@@ -1,4 +1,4 @@
-import { Input, ScrollView, Text, View } from '@tarojs/components';
+import { Textarea, ScrollView, Text, View } from '@tarojs/components';
 import Taro, { getCurrentInstance, useDidShow, useUnload } from '@tarojs/taro';
 import { useMemo, useRef, useState } from 'react';
 import type { LeaveNoticeSnapshotVO, RankResponseVO, RoomDetailVO, UserVO } from '@maixu/frontend-sdk';
@@ -18,6 +18,8 @@ interface ChatMessage {
   createdAt: number;
 }
 
+type BottomPanelType = 'plus' | 'history' | null;
+
 type PlusPanelItem = {
   key: string;
   icon: string;
@@ -26,6 +28,9 @@ type PlusPanelItem = {
 
 const BOT_NAME = '爱看看';
 const HISTORY_LIMIT = 8;
+const UNREAD_PILL_THRESHOLD = 20;
+const MAX_CHAT_MESSAGES = 300;
+
 const SCORE_MAP: Record<string, number> = {
   手速: 0,
   任务A: 20,
@@ -141,6 +146,7 @@ function parseMathAnswer(promptText?: string) {
   if (!promptText) return null;
   const match = promptText.match(/(-?\d+)\s*([+\-xX*])\s*(-?\d+)/);
   if (!match) return null;
+
   const a = Number(match[1]);
   const op = match[2];
   const b = Number(match[3]);
@@ -151,14 +157,22 @@ function parseMathAnswer(promptText?: string) {
   return String(a * b);
 }
 
-function getHistoryKey(roomId: string) {
+function getRecentKey(roomId: string) {
   return `maixu_chat_recent_commands_${roomId}`;
+}
+
+function getMessagesKey(roomId: string) {
+  return `maixu_chat_messages_${roomId}`;
+}
+
+function getReadAtKey(roomId: string) {
+  return `maixu_chat_last_read_at_${roomId}`;
 }
 
 function loadRecentCommands(roomId: string) {
   if (!roomId) return [] as string[];
   try {
-    const raw = Taro.getStorageSync(getHistoryKey(roomId)) as string[] | undefined;
+    const raw = Taro.getStorageSync(getRecentKey(roomId)) as string[] | undefined;
     if (!Array.isArray(raw)) return [];
     return raw.filter((item) => typeof item === 'string' && item.trim()).slice(0, HISTORY_LIMIT);
   } catch {
@@ -168,7 +182,43 @@ function loadRecentCommands(roomId: string) {
 
 function saveRecentCommands(roomId: string, list: string[]) {
   if (!roomId) return;
-  Taro.setStorageSync(getHistoryKey(roomId), list.slice(0, HISTORY_LIMIT));
+  Taro.setStorageSync(getRecentKey(roomId), list.slice(0, HISTORY_LIMIT));
+}
+
+function loadCachedMessages(roomId: string): ChatMessage[] {
+  if (!roomId) return [];
+  try {
+    const raw = Taro.getStorageSync(getMessagesKey(roomId)) as ChatMessage[] | undefined;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((item) => item && typeof item.text === 'string' && typeof item.createdAt === 'number')
+      .slice(-MAX_CHAT_MESSAGES);
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedMessages(roomId: string, list: ChatMessage[]) {
+  if (!roomId) return;
+  Taro.setStorageSync(getMessagesKey(roomId), list.slice(-MAX_CHAT_MESSAGES));
+}
+
+function loadLastReadAt(roomId: string) {
+  if (!roomId) return 0;
+  const raw = Taro.getStorageSync(getReadAtKey(roomId));
+  return typeof raw === 'number' ? raw : 0;
+}
+
+function saveLastReadAt(roomId: string, timestamp: number) {
+  if (!roomId) return;
+  Taro.setStorageSync(getReadAtKey(roomId), timestamp);
+}
+
+function calcInputLines(text: string) {
+  if (!text) return 1;
+  const hardLines = text.split('\n');
+  const estimated = hardLines.reduce((total, line) => total + Math.max(1, Math.ceil(line.length / 18)), 0);
+  return Math.min(3, Math.max(1, estimated));
 }
 
 export default function RoomDetailPage() {
@@ -178,6 +228,7 @@ export default function RoomDetailPage() {
   const leaveSignatureRef = useRef('');
   const initializedRef = useRef(false);
   const lastTimeDividerRef = useRef(0);
+  const roomIdRef = useRef('');
 
   const [roomId, setRoomId] = useState('');
   const [room, setRoom] = useState<RoomDetailVO | null>(null);
@@ -191,10 +242,11 @@ export default function RoomDetailPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [scrollIntoView, setScrollIntoView] = useState('');
   const [composer, setComposer] = useState('');
+  const [inputLineCount, setInputLineCount] = useState(1);
   const [sending, setSending] = useState(false);
 
-  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
-  const [showPlusPanel, setShowPlusPanel] = useState(false);
+  const [unreadEntryCount, setUnreadEntryCount] = useState(0);
+  const [bottomPanel, setBottomPanel] = useState<BottomPanelType>(null);
   const [recentCommands, setRecentCommands] = useState<string[]>([]);
 
   const hasInputText = useMemo(() => composer.trim().length > 0, [composer]);
@@ -205,6 +257,20 @@ export default function RoomDetailPage() {
     return `${room.name}排麦群🚫闲聊(${count})`;
   }, [room, memberCount]);
 
+  const persistMessages = (list: ChatMessage[]) => {
+    const activeRoomId = roomIdRef.current;
+    if (!activeRoomId) return;
+    saveCachedMessages(activeRoomId, list);
+  };
+
+  const setAndPersistMessages = (updater: (prev: ChatMessage[]) => ChatMessage[]) => {
+    setMessages((prev) => {
+      const next = updater(prev).slice(-MAX_CHAT_MESSAGES);
+      persistMessages(next);
+      return next;
+    });
+  };
+
   const pushMessage = (role: ChatRole, text: string, senderName?: string) => {
     const nextMessage: ChatMessage = {
       id: createId(),
@@ -214,8 +280,15 @@ export default function RoomDetailPage() {
       createdAt: Date.now(),
     };
 
-    setMessages((prev) => [...prev, nextMessage].slice(-160));
+    setAndPersistMessages((prev) => [...prev, nextMessage]);
     setScrollIntoView(nextMessage.id);
+  };
+
+  const markConversationRead = () => {
+    const activeRoomId = roomIdRef.current;
+    if (!activeRoomId) return;
+    saveLastReadAt(activeRoomId, Date.now());
+    setUnreadEntryCount(0);
   };
 
   const maybePushTimeDivider = () => {
@@ -228,11 +301,12 @@ export default function RoomDetailPage() {
 
   const updateRecentCommand = (command: string) => {
     const normalized = command.trim();
-    if (!normalized || !roomId) return;
+    const activeRoomId = roomIdRef.current;
+    if (!normalized || !activeRoomId) return;
 
     setRecentCommands((prev) => {
       const next = [normalized, ...prev.filter((item) => item !== normalized)].slice(0, HISTORY_LIMIT);
-      saveRecentCommands(roomId, next);
+      saveRecentCommands(activeRoomId, next);
       return next;
     });
   };
@@ -271,7 +345,7 @@ export default function RoomDetailPage() {
       rankData.entries.forEach((item) => uniqueSet.add(item.userId));
       leaveData.activeNotices.forEach((item) => uniqueSet.add(item.userId));
       if (user?.id) uniqueSet.add(user.id);
-      setMemberCount(uniqueSet.size || 1);
+      setMemberCount(Math.max(1, uniqueSet.size));
     } catch {
       const fallbackSet = new Set(rankData.entries.map((item) => item.userId));
       if (user?.id) fallbackSet.add(user.id);
@@ -293,8 +367,18 @@ export default function RoomDetailPage() {
     const activeRoomId = resolveRoomId();
     if (!activeRoomId) return;
 
+    roomIdRef.current = activeRoomId;
     setRoomId(activeRoomId);
     setRecentCommands(loadRecentCommands(activeRoomId));
+
+    const cachedMessages = loadCachedMessages(activeRoomId);
+    setMessages(cachedMessages);
+    if (cachedMessages.length) {
+      setScrollIntoView(cachedMessages[cachedMessages.length - 1].id);
+    }
+
+    const unreadCount = cachedMessages.filter((item) => item.role !== 'self' && item.createdAt > loadLastReadAt(activeRoomId)).length;
+    setUnreadEntryCount(unreadCount >= UNREAD_PILL_THRESHOLD ? unreadCount : 0);
 
     requireLogin(`/pages/rooms/detail/index?roomId=${activeRoomId}`).then(async (user) => {
       if (!user) return;
@@ -303,7 +387,7 @@ export default function RoomDetailPage() {
       try {
         const loaded = await hydrateState(activeRoomId, user);
 
-        if (!initializedRef.current) {
+        if (!cachedMessages.length && !initializedRef.current) {
           pushMessage('bot', buildSpeedRankText(loaded.rankData), BOT_NAME);
           pushMessage('bot', buildHostCardText(loaded.rankData, loaded.roomDetail, hostName), BOT_NAME);
           maybePushTimeDivider();
@@ -352,6 +436,7 @@ export default function RoomDetailPage() {
     if (timerRef.current) clearInterval(timerRef.current);
     wsCleanupRef.current?.();
     wsCleanupRef.current = null;
+    markConversationRead();
   });
 
   const ensureChallengeTicketSilently = async () => {
@@ -368,10 +453,7 @@ export default function RoomDetailPage() {
     }
 
     const autoAnswer = issueResult.expectedAnswer || parseMathAnswer(issueResult.promptText);
-
-    if (!autoAnswer) {
-      return undefined;
-    }
+    if (!autoAnswer) return undefined;
 
     const verifyResult = await sdk.challenges.verify(room.currentSlot.id, {
       challengeId: issueResult.challengeId || '',
@@ -440,7 +522,7 @@ export default function RoomDetailPage() {
 
   const executeCommand = async (rawInput: string) => {
     const input = rawInput.trim().replace(/\s+/g, ' ');
-    if (!input || !room) return;
+    if (!input || !room) return false;
 
     if (/^(麦序|榜单|手速排名|查看麦序|\/rank)$/i.test(input)) {
       const nextRank = await sdk.slots.rank(room.currentSlot.id);
@@ -448,24 +530,24 @@ export default function RoomDetailPage() {
       rankSignatureRef.current = buildRankSignature(nextRank);
       pushMessage('bot', buildSpeedRankText(nextRank), BOT_NAME);
       pushMessage('bot', buildHostCardText(nextRank, room, hostName), BOT_NAME);
-      return;
+      return true;
     }
 
     if (/^(取消排麦|取消|全麦-1|\/cancel)$/i.test(input)) {
       await handleCancel();
-      return;
+      return true;
     }
 
     if (/^(回厅|我回来了|\/back)$/i.test(input)) {
       await handleLeaveReturn();
-      return;
+      return true;
     }
 
     const leaveMatch = input.match(/^(?:报备|\/leave)(?:\s+(\d+))?$/i);
     if (leaveMatch) {
       const minutes = Number(leaveMatch[1] || '5');
       await handleLeaveReport(Math.min(Math.max(minutes, 1), 60));
-      return;
+      return true;
     }
 
     const plusOneJoin = /^(全麦\+1|补|手速)$/i.test(input);
@@ -499,15 +581,16 @@ export default function RoomDetailPage() {
       }
 
       await handleJoin(sourceContent, score);
-      return;
+      return true;
     }
 
     if (/^\/host$/i.test(input)) {
       await Taro.navigateTo({ url: `/pages/host/dashboard/index?slotId=${room.currentSlot.id}` });
-      return;
+      return true;
     }
 
-    pushMessage('bot', '可用命令：全麦+1、全麦-1、补、麦序、报备 5、回厅', BOT_NAME);
+    // 普通聊天内容直接发，不再强制命令
+    return false;
   };
 
   const handleSend = async (overrideText?: string) => {
@@ -515,8 +598,8 @@ export default function RoomDetailPage() {
     if (!text || !room) return;
 
     setComposer('');
-    setShowHistoryPanel(false);
-    setShowPlusPanel(false);
+    setInputLineCount(1);
+    setBottomPanel(null);
     updateRecentCommand(text);
 
     maybePushTimeDivider();
@@ -531,6 +614,7 @@ export default function RoomDetailPage() {
       showError(error);
     } finally {
       setSending(false);
+      markConversationRead();
     }
   };
 
@@ -540,13 +624,11 @@ export default function RoomDetailPage() {
   };
 
   const handleHistoryButton = () => {
-    setShowPlusPanel(false);
-    setShowHistoryPanel((prev) => !prev);
+    setBottomPanel((prev) => (prev === 'history' ? null : 'history'));
   };
 
   const handlePlusButton = () => {
-    setShowHistoryPanel(false);
-    setShowPlusPanel((prev) => !prev);
+    setBottomPanel((prev) => (prev === 'plus' ? null : 'plus'));
   };
 
   const handlePlusItemClick = (item: PlusPanelItem) => {
@@ -561,6 +643,26 @@ export default function RoomDetailPage() {
       confirmText: '我知道了',
     });
   };
+
+  const handleUnreadPillClick = () => {
+    if (messages.length) {
+      setScrollIntoView(messages[messages.length - 1].id);
+    }
+    markConversationRead();
+  };
+
+  const textareaExtraProps = {
+    onKeyDown: (e: {
+      key?: string;
+      shiftKey?: boolean;
+      preventDefault?: () => void;
+    }) => {
+      if (e?.key === 'Enter' && !e?.shiftKey) {
+        e.preventDefault?.();
+        handleSend();
+      }
+    },
+  } as Record<string, unknown>;
 
   if (!room) {
     return (
@@ -591,7 +693,9 @@ export default function RoomDetailPage() {
         <Text className='notice-text'>{announcement}</Text>
       </View>
 
-      <View className='new-msg-pill'>⌃ 226 条新消息</View>
+      {unreadEntryCount >= UNREAD_PILL_THRESHOLD ? (
+        <View className='new-msg-pill' onClick={handleUnreadPillClick}>⌃ {unreadEntryCount} 条新消息</View>
+      ) : null}
 
       <ScrollView
         className='chat-scroll'
@@ -636,17 +740,24 @@ export default function RoomDetailPage() {
       <View className='chat-composer'>
         <View className='composer-circle' onClick={handleVoiceIcon}>◉</View>
 
-        <Input
-          className='composer-input'
+        <Textarea
+          {...textareaExtraProps}
+          className={`composer-input ${inputLineCount >= 3 ? 'max-lines' : ''}`}
           value={composer}
-          onInput={(e) => setComposer(e.detail.value)}
-          onConfirm={() => handleSend()}
-          confirmType='send'
-          placeholder='发消息'
-          onFocus={() => {
-            setShowHistoryPanel(false);
-            setShowPlusPanel(false);
+          onInput={(e) => {
+            const next = e.detail.value;
+            setComposer(next);
+            setInputLineCount(calcInputLines(next));
           }}
+          onConfirm={() => handleSend()}
+          maxlength={500}
+          showConfirmBar={false}
+          confirmType='send'
+          fixed
+          cursorSpacing={20}
+          placeholder='发消息'
+          style={{ height: `${inputLineCount * 40 + 20}px` }}
+          onFocus={() => setBottomPanel(null)}
         />
 
         {hasInputText ? (
@@ -661,8 +772,8 @@ export default function RoomDetailPage() {
         )}
       </View>
 
-      {showHistoryPanel ? (
-        <View className='history-panel'>
+      {bottomPanel === 'history' ? (
+        <View className='bottom-panel history-panel'>
           <View className='history-title'>最近发送</View>
           {recentCommands.length ? (
             recentCommands.map((item) => (
@@ -676,8 +787,8 @@ export default function RoomDetailPage() {
         </View>
       ) : null}
 
-      {showPlusPanel ? (
-        <View className='plus-panel'>
+      {bottomPanel === 'plus' ? (
+        <View className='bottom-panel plus-panel'>
           <View className='plus-grid'>
             {PLUS_PANEL_ITEMS.map((item) => (
               <View className='plus-item' key={item.key} onClick={() => handlePlusItemClick(item)}>
