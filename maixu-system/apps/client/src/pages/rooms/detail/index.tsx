@@ -1,6 +1,6 @@
-import { Button, Input, ScrollView, Text, View } from '@tarojs/components';
+import { Input, ScrollView, Text, View } from '@tarojs/components';
 import Taro, { getCurrentInstance, useDidShow, useUnload } from '@tarojs/taro';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { LeaveNoticeSnapshotVO, RankResponseVO, RoomDetailVO, UserVO } from '@maixu/frontend-sdk';
 import { requireLogin } from '../../../services/auth';
 import { getCurrentUser, sdk } from '../../../services/sdk';
@@ -8,19 +8,22 @@ import { createWsRankSubscription } from '../../../services/ws';
 import { showError } from '../../../utils/message';
 import './index.scss';
 
-type ChatRole = 'me' | 'bot' | 'system';
+type ChatRole = 'member' | 'bot' | 'time';
 
 interface ChatMessage {
   id: string;
   role: ChatRole;
   text: string;
+  senderName?: string;
   createdAt: number;
 }
 
+const BOT_NAME = '爱看看';
 const SCORE_MAP: Record<string, number> = {
   手速: 0,
   任务A: 20,
   任务B: 30,
+  补: 5,
   'task-a': 20,
   'task-b': 30,
 };
@@ -50,30 +53,6 @@ function buildLeaveSignature(snapshot: LeaveNoticeSnapshotVO | null) {
     .join('|');
 }
 
-function buildRankText(rank: RankResponseVO | null, limit = 6) {
-  if (!rank) return '当前还没有麦序数据。';
-  if (!rank.entries.length) return '当前空麦，直接发「排麦 手速」就能上榜。';
-
-  const rows = rank.entries.slice(0, limit).map((item) => {
-    const nickname = item.user?.nickname || item.userId;
-    return `No.${item.rank} ${nickname}（${item.sourceContent} / ${item.score}分）`;
-  });
-
-  return [`当前共 ${rank.entries.length} 人排麦：`, ...rows].join('\n');
-}
-
-function buildCommandHelp() {
-  return [
-    '可用指令：',
-    '1) 排麦 手速',
-    '2) 排麦 任务A 20',
-    '3) 取消排麦',
-    '4) 报备 5',
-    '5) 回厅',
-    '6) 麦序 / 我的位置',
-  ].join('\n');
-}
-
 function resolveRoomId() {
   const fromRouter = getCurrentInstance().router?.params?.roomId;
   if (fromRouter) return fromRouter;
@@ -87,6 +66,59 @@ function resolveRoomId() {
   return '';
 }
 
+function buildMentionName(entry: RankResponseVO['entries'][number]) {
+  return entry.user?.nickname || entry.userId.slice(0, 4);
+}
+
+function buildSpeedRankText(rank: RankResponseVO | null) {
+  if (!rank) return '手速排名\n当前暂无数据';
+
+  const list = rank.entries.slice(0, 5);
+
+  if (!list.length) {
+    return ['手速排名', '当前空麦，发送「全麦+1」或「排麦 手速」即可上榜。'].join('\n');
+  }
+
+  const rows = list.map((item, index) => `${index + 1}.@${buildMentionName(item)}(${item.sourceContent || '手速'})`);
+  const mentionLine = list.map((item) => `@${buildMentionName(item)}`).join('');
+
+  return ['手速排名', ...rows, '', '──────────', mentionLine].join('\n');
+}
+
+function buildHostCardText(rank: RankResponseVO | null, room: RoomDetailVO, hostName: string) {
+  const list = rank?.entries.slice(0, 5) || [];
+  const slotHour = room.currentSlot.slotHour;
+  const endHour = (slotHour + 1) % 24;
+  const closeTitle = rank?.slot?.state === 'CLOSED' ? '麦序截止' : '当前麦序列表（1）';
+
+  const rows = list.length
+    ? list.map((item, index) => `${index + 1}.@${buildMentionName(item)}(${item.sourceContent || '手速'})`)
+    : ['1.（当前无人排麦）'];
+
+  const capacity = Math.max((room.config.maxRank || 6) - list.length, 0);
+  const mentionLine = list.length ? list.map((item) => `@${buildMentionName(item)}`).join('') : '@暂无';
+
+  return [
+    `主持: ${hostName}`,
+    `时间: ${slotHour} - ${endHour}`,
+    '──────────',
+    closeTitle,
+    ...rows,
+    `空: ${capacity}`,
+    '──────────',
+    mentionLine,
+    `${slotHour}:30 前可补排`,
+  ].join('\n');
+}
+
+function buildJoinAck(userName: string, rankValue?: number | null) {
+  return [
+    `@${userName} 记录全麦关键词+1 成功`,
+    `当前时段已全麦至 ${rankValue ?? '-'}${rankValue ? '.0' : ''}`,
+    '❗如报备错误，请扣 全麦-1',
+  ].join('\n');
+}
+
 export default function RoomDetailPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wsCleanupRef = useRef<null | (() => void)>(null);
@@ -94,30 +126,37 @@ export default function RoomDetailPage() {
   const leaveSignatureRef = useRef('');
   const initializedRef = useRef(false);
 
-  const [roomId, setRoomId] = useState('');
   const [room, setRoom] = useState<RoomDetailVO | null>(null);
   const [rank, setRank] = useState<RankResponseVO | null>(null);
   const [leaveSnapshot, setLeaveSnapshot] = useState<LeaveNoticeSnapshotVO | null>(null);
   const [currentUser, setCurrentUser] = useState<UserVO | undefined>(() => getCurrentUser<UserVO>());
-  const [wsConnected, setWsConnected] = useState(false);
+  const [hostName, setHostName] = useState('小果');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [scrollIntoView, setScrollIntoView] = useState('');
   const [composer, setComposer] = useState('');
   const [sending, setSending] = useState(false);
 
-  const pushMessage = (role: ChatRole, text: string) => {
+  const titleText = useMemo(() => {
+    if (!room) return '排麦群';
+    const count = rank?.entries.length ?? room.currentRankCount;
+    return `${room.name}排麦群🚫闲聊(${count})`;
+  }, [room, rank?.entries.length]);
+
+  const pushMessage = (role: ChatRole, text: string, senderName?: string) => {
     const nextMessage: ChatMessage = {
       id: createId(),
       role,
       text,
+      senderName,
       createdAt: Date.now(),
     };
 
-    setMessages((prev) => {
-      const next = [...prev, nextMessage].slice(-120);
-      return next;
-    });
+    setMessages((prev) => [...prev, nextMessage].slice(-140));
     setScrollIntoView(nextMessage.id);
+  };
+
+  const pushTimeDivider = () => {
+    pushMessage('time', formatTime(Date.now()));
   };
 
   const hydrateState = async (activeRoomId: string) => {
@@ -136,6 +175,18 @@ export default function RoomDetailPage() {
       };
     }
 
+    try {
+      const resolve = await sdk.hostSchedules.resolve(roomDetail.id, {
+        slotDate: roomDetail.currentSlot.slotDate,
+        slotHour: roomDetail.currentSlot.slotHour,
+      });
+      if (resolve.hostUser?.nickname) {
+        setHostName(resolve.hostUser.nickname);
+      }
+    } catch {
+      // ignore host resolve error
+    }
+
     setRoom(roomDetail);
     setRank(rankData);
     setLeaveSnapshot(leaveData);
@@ -149,8 +200,6 @@ export default function RoomDetailPage() {
     const activeRoomId = resolveRoomId();
     if (!activeRoomId) return;
 
-    setRoomId(activeRoomId);
-
     requireLogin(`/pages/rooms/detail/index?roomId=${activeRoomId}`).then(async (user) => {
       if (!user) return;
       setCurrentUser(user);
@@ -159,10 +208,9 @@ export default function RoomDetailPage() {
         const loaded = await hydrateState(activeRoomId);
 
         if (!initializedRef.current) {
-          pushMessage('system', `已进入群聊：${loaded.roomDetail.name}`);
-          pushMessage('bot', '我是麦序机器人，直接给我发指令就行。');
-          pushMessage('bot', buildCommandHelp());
-          pushMessage('bot', buildRankText(loaded.rankData));
+          pushMessage('bot', buildSpeedRankText(loaded.rankData), BOT_NAME);
+          pushMessage('bot', buildHostCardText(loaded.rankData, loaded.roomDetail, hostName), BOT_NAME);
+          pushTimeDivider();
           initializedRef.current = true;
         }
 
@@ -170,14 +218,12 @@ export default function RoomDetailPage() {
         wsCleanupRef.current = createWsRankSubscription({
           slotId: loaded.roomDetail.currentSlot.id,
           roomId: loaded.roomDetail.id,
-          onConnected: () => setWsConnected(true),
-          onDisconnected: () => setWsConnected(false),
           onRankUpdated: (nextRank) => {
             setRank(nextRank);
             const signature = buildRankSignature(nextRank);
             if (signature !== rankSignatureRef.current) {
               rankSignatureRef.current = signature;
-              pushMessage('bot', `📣 麦序更新\n${buildRankText(nextRank, 5)}`);
+              pushMessage('bot', buildSpeedRankText(nextRank), BOT_NAME);
             }
           },
           onLeaveNoticeUpdated: (snapshot) => {
@@ -185,7 +231,9 @@ export default function RoomDetailPage() {
             const signature = buildLeaveSignature(snapshot);
             if (signature !== leaveSignatureRef.current) {
               leaveSignatureRef.current = signature;
-              pushMessage('bot', `暂离状态更新：当前 ${snapshot.activeNotices.length} 人暂离`);
+              if (snapshot.activeNotices.length) {
+                pushMessage('bot', `@全体成员 当前有 ${snapshot.activeNotices.length} 人处于报备中`, BOT_NAME);
+              }
             }
           },
         });
@@ -208,7 +256,6 @@ export default function RoomDetailPage() {
     if (timerRef.current) clearInterval(timerRef.current);
     wsCleanupRef.current?.();
     wsCleanupRef.current = null;
-    setWsConnected(false);
   });
 
   const ensureChallengeTicket = async () => {
@@ -273,8 +320,8 @@ export default function RoomDetailPage() {
       throw new Error(result.reason || '排麦失败');
     }
 
-    pushMessage('bot', `✅ 排麦成功，你当前在 No.${result.rank ?? '-'}。`);
-    pushMessage('bot', buildRankText(result.currentRank));
+    pushMessage('bot', buildJoinAck(currentUser.nickname || '你', result.rank), BOT_NAME);
+    pushMessage('bot', buildHostCardText(result.currentRank, room, hostName), BOT_NAME);
   };
 
   const handleCancel = async () => {
@@ -283,81 +330,43 @@ export default function RoomDetailPage() {
     const result = await sdk.rank.cancel(room.currentSlot.id, { userId: currentUser.id });
     setRank(result.currentRank);
     rankSignatureRef.current = buildRankSignature(result.currentRank);
-    pushMessage('bot', '✅ 已取消排麦。');
-    pushMessage('bot', buildRankText(result.currentRank));
+
+    pushMessage('bot', `@${currentUser.nickname || '你'} 已执行全麦-1`, BOT_NAME);
+    pushMessage('bot', buildHostCardText(result.currentRank, room, hostName), BOT_NAME);
   };
 
   const handleLeaveReport = async (minutes: number) => {
-    if (!room) return;
+    if (!room || !currentUser) return;
 
     const result = await sdk.leaveNotices.report(room.currentSlot.id, { minutes });
     setLeaveSnapshot(result.snapshot);
     leaveSignatureRef.current = buildLeaveSignature(result.snapshot);
-    pushMessage('bot', `📝 已报备暂离 ${minutes} 分钟，记得按时回厅。`);
+    pushMessage('bot', `@${currentUser.nickname} 报备成功，${minutes} 分钟内回厅`, BOT_NAME);
   };
 
   const handleLeaveReturn = async () => {
-    if (!room) return;
+    if (!room || !currentUser) return;
 
     const result = await sdk.leaveNotices.returnFromLeave(room.currentSlot.id);
     setLeaveSnapshot(result.snapshot);
     leaveSignatureRef.current = buildLeaveSignature(result.snapshot);
-    pushMessage('bot', '🙌 已记录回厅，继续排麦。');
-  };
-
-  const handleMyStatus = () => {
-    if (!currentUser?.id) {
-      pushMessage('bot', '你还没登录。');
-      return;
-    }
-
-    const myEntry = rank?.entries.find((item) => item.userId === currentUser.id);
-    const myLeave = leaveSnapshot?.activeNotices.find((item) => item.userId === currentUser.id);
-
-    if (!myEntry) {
-      pushMessage('bot', '你当前不在麦序里。发「排麦 手速」就能上麦。');
-      return;
-    }
-
-    const rows = [
-      `你的当前位置：No.${myEntry.rank}`,
-      `排麦内容：${myEntry.sourceContent}`,
-      `分数：${myEntry.score}`,
-    ];
-
-    if (myLeave) {
-      rows.push(`暂离中，最晚回厅：${new Date(myLeave.returnDeadline).toLocaleTimeString()}`);
-    }
-
-    pushMessage('bot', rows.join('\n'));
+    pushMessage('bot', `@${currentUser.nickname} 已回厅`, BOT_NAME);
   };
 
   const executeCommand = async (rawInput: string) => {
     const input = rawInput.trim().replace(/\s+/g, ' ');
+    if (!input || !room) return;
 
-    if (!input) return;
-
-    if (/^(帮助|菜单|help|\/help)$/i.test(input)) {
-      pushMessage('bot', buildCommandHelp());
+    if (/^(麦序|榜单|手速排名|查看麦序|\/rank)$/i.test(input)) {
+      const nextRank = await sdk.slots.rank(room.currentSlot.id);
+      setRank(nextRank);
+      rankSignatureRef.current = buildRankSignature(nextRank);
+      pushMessage('bot', buildSpeedRankText(nextRank), BOT_NAME);
+      pushMessage('bot', buildHostCardText(nextRank, room, hostName), BOT_NAME);
       return;
     }
 
-    if (/^(麦序|榜单|查看麦序|\/rank)$/i.test(input)) {
-      if (room) {
-        const nextRank = await sdk.slots.rank(room.currentSlot.id);
-        setRank(nextRank);
-        rankSignatureRef.current = buildRankSignature(nextRank);
-        pushMessage('bot', buildRankText(nextRank));
-      }
-      return;
-    }
-
-    if (/^(我的位置|我的麦序|我在哪|\/me)$/i.test(input)) {
-      handleMyStatus();
-      return;
-    }
-
-    if (/^(取消排麦|取消|\/cancel)$/i.test(input)) {
+    if (/^(取消排麦|取消|全麦-1|\/cancel)$/i.test(input)) {
       await handleCancel();
       return;
     }
@@ -374,24 +383,33 @@ export default function RoomDetailPage() {
       return;
     }
 
+    const plusOneJoin = /^(全麦\+1|补|手速)$/i.test(input);
     const joinMatch = input.match(/^(?:排麦|\/join)(?:\s+(.+))?$/i);
-    if (joinMatch) {
-      const payload = (joinMatch[1] || '').trim();
+
+    if (plusOneJoin || joinMatch) {
       let sourceContent = '手速';
       let score = SCORE_MAP[sourceContent];
 
-      if (payload) {
-        const tokens = payload.split(' ');
-        const last = tokens[tokens.length - 1];
-        const maybeScore = Number(last);
-        const hasScore = Number.isFinite(maybeScore) && /^-?\d+$/.test(last);
+      if (/^补$/i.test(input)) {
+        sourceContent = '补';
+        score = SCORE_MAP[sourceContent] ?? 5;
+      }
 
-        if (hasScore) {
-          sourceContent = tokens.slice(0, -1).join(' ') || '手速';
-          score = maybeScore;
-        } else {
-          sourceContent = payload;
-          score = SCORE_MAP[sourceContent] ?? 0;
+      if (joinMatch) {
+        const payload = (joinMatch[1] || '').trim();
+        if (payload) {
+          const tokens = payload.split(' ');
+          const last = tokens[tokens.length - 1];
+          const maybeScore = Number(last);
+          const hasScore = Number.isFinite(maybeScore) && /^-?\d+$/.test(last);
+
+          if (hasScore) {
+            sourceContent = tokens.slice(0, -1).join(' ') || '手速';
+            score = maybeScore;
+          } else {
+            sourceContent = payload;
+            score = SCORE_MAP[sourceContent] ?? 0;
+          }
         }
       }
 
@@ -400,104 +418,125 @@ export default function RoomDetailPage() {
     }
 
     if (/^\/host$/i.test(input)) {
-      if (room) {
-        await Taro.navigateTo({ url: `/pages/host/dashboard/index?slotId=${room.currentSlot.id}` });
-      }
+      await Taro.navigateTo({ url: `/pages/host/dashboard/index?slotId=${room.currentSlot.id}` });
       return;
     }
 
-    pushMessage('bot', `我主要处理麦序指令。\n${buildCommandHelp()}`);
+    pushMessage('bot', '可用命令：全麦+1、全麦-1、补、麦序、报备 5、回厅', BOT_NAME);
   };
 
-  const handleSend = async (presetText?: string) => {
-    const text = (presetText ?? composer).trim();
+  const handleSend = async (overrideText?: string) => {
+    const text = (overrideText ?? composer).trim();
     if (!text || !room) return;
 
-    if (!presetText) {
-      setComposer('');
-    }
-
-    pushMessage('me', text);
+    setComposer('');
+    pushMessage('member', text, currentUser?.nickname || '我');
     setSending(true);
 
     try {
       await executeCommand(text);
     } catch (error) {
       const message = error instanceof Error ? error.message : '操作失败';
-      pushMessage('bot', `❌ ${message}`);
+      pushMessage('bot', `❗${message}`, BOT_NAME);
       showError(error);
     } finally {
       setSending(false);
     }
   };
 
+  const handlePlusIcon = async () => {
+    if (composer.trim()) {
+      await handleSend();
+      return;
+    }
+
+    const commands = ['全麦+1', '补', '麦序', '全麦-1', '报备 5', '回厅'];
+    const { tapIndex } = await Taro.showActionSheet({ itemList: commands });
+    await handleSend(commands[tapIndex]);
+  };
+
+  const handleEmojiIcon = () => {
+    if (!composer.trim()) {
+      setComposer('麦序');
+      return;
+    }
+    setComposer((prev) => `${prev}🙂`);
+  };
+
+  const handleVoiceIcon = () => {
+    if (sending) return;
+    handleSend('全麦+1');
+  };
+
   if (!room) {
     return (
-      <View className='wx-chat-page'>
-        <View className='wx-loading'>正在进入群聊...</View>
+      <View className='wechat-chat-page'>
+        <View className='wechat-loading'>正在进入群聊...</View>
       </View>
     );
   }
 
   return (
-    <View className='wx-chat-page'>
-      <View className='wx-chat-header'>
-        <View className='wx-chat-title'>{room.name}</View>
-        <Text className='wx-chat-meta'>
-          {rank?.entries.length || 0} 人排麦 · {wsConnected ? '实时连接' : '轮询兜底'}
-        </Text>
+    <View className='wechat-chat-page'>
+      <View className='chat-topbar'>
+        <View className='chat-back' onClick={() => Taro.navigateBack()}>‹</View>
+        <View className='chat-title-wrap'>
+          <Text className='chat-title'>{titleText}</Text>
+        </View>
+        <View className='chat-top-actions'>
+          <Text className='top-action'>◌</Text>
+          <Text className='top-action'>⋯</Text>
+        </View>
       </View>
 
-      <ScrollView className='wx-message-list' scrollY scrollWithAnimation scrollIntoView={scrollIntoView}>
-        {messages.map((message) => (
-          <View
-            id={message.id}
-            key={message.id}
-            className={`wx-message-row ${message.role === 'me' ? 'is-me' : ''} ${
-              message.role === 'system' ? 'is-system' : ''
-            }`}
-          >
-            {message.role !== 'me' ? (
-              <View className={`wx-avatar ${message.role === 'system' ? 'sys' : ''}`}>
-                {message.role === 'system' ? '系' : '麦'}
-              </View>
-            ) : null}
+      <View className='chat-notice'>
+        <Text className='notice-icon'>🌞</Text>
+        <Text className='notice-text'>@兔兔大王: 口令 累计过xxx 所有累计 本周麦序 ...</Text>
+      </View>
 
-            <View className={`wx-bubble ${message.role === 'me' ? 'me' : ''} ${message.role === 'system' ? 'system' : ''}`}>
-              <Text className='wx-text'>{message.text}</Text>
-              <Text className='wx-time'>{formatTime(message.createdAt)}</Text>
+      <View className='new-msg-pill'>⌃ 226 条新消息</View>
+
+      <ScrollView className='chat-scroll' scrollY scrollWithAnimation scrollIntoView={scrollIntoView}>
+        {messages.map((message) => {
+          if (message.role === 'time') {
+            return (
+              <View className='msg-time' id={message.id} key={message.id}>
+                <Text>{message.text}</Text>
+              </View>
+            );
+          }
+
+          return (
+            <View className='msg-row' id={message.id} key={message.id}>
+              <View className={`msg-avatar ${message.role === 'bot' ? 'bot' : ''}`}>
+                {message.role === 'bot' ? '🐶' : (message.senderName || '我').slice(0, 1)}
+              </View>
+
+              <View className='msg-main'>
+                <Text className='msg-name'>{message.senderName || (message.role === 'bot' ? BOT_NAME : '成员')}</Text>
+                <View className='msg-bubble'>
+                  <Text className='msg-text'>{message.text}</Text>
+                </View>
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
 
-      <View className='wx-quick-actions'>
-        <Button className='quick-btn' size='mini' onClick={() => handleSend('排麦 手速')}>
-          排麦
-        </Button>
-        <Button className='quick-btn' size='mini' onClick={() => handleSend('取消排麦')}>
-          取消
-        </Button>
-        <Button className='quick-btn' size='mini' onClick={() => handleSend('麦序')}>
-          麦序
-        </Button>
-        <Button className='quick-btn' size='mini' onClick={() => handleSend('我的位置')}>
-          我的
-        </Button>
-      </View>
+      <View className='chat-composer'>
+        <View className='composer-circle' onClick={handleVoiceIcon}>◉</View>
 
-      <View className='wx-composer'>
         <Input
-          className='wx-input'
+          className='composer-input'
           value={composer}
           onInput={(e) => setComposer(e.detail.value)}
           onConfirm={() => handleSend()}
           confirmType='send'
-          placeholder='发消息给麦序机器人，例如：排麦 手速'
+          placeholder='发消息'
         />
-        <Button className='wx-send-btn' loading={sending} onClick={() => handleSend()}>
-          发送
-        </Button>
+
+        <View className='composer-circle' onClick={handleEmojiIcon}>☺</View>
+        <View className={`composer-circle plus ${sending ? 'disabled' : ''}`} onClick={handlePlusIcon}>＋</View>
       </View>
     </View>
   );
