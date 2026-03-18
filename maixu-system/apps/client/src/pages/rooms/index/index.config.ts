@@ -1,1 +1,1 @@
-export default definePageConfig({ navigationBarTitleText: '房间列表' });
+export default definePageConfig({ navigationBarTitleText: '微信' });

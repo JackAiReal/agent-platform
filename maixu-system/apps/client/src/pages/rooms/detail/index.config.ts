@@ -1,1 +1,1 @@
-export default definePageConfig({ navigationBarTitleText: '房间详情' });
+export default definePageConfig({ navigationBarTitleText: '群聊' });

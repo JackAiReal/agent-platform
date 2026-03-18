@@ -1,11 +1,140 @@
-.room-item-title {
-  font-size: 30px;
-  font-weight: 700;
-  margin-bottom: 8px;
+.wechat-page {
+  min-height: 100vh;
+  background: #ededed;
+  padding: 0 0 22px;
+  box-sizing: border-box;
 }
 
-.room-meta {
-  color: #6b7280;
+.wechat-header {
+  background: #f6f6f6;
+  padding: 28px 24px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.wechat-title {
+  font-size: 38px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.wechat-subtitle {
+  margin-top: 6px;
   font-size: 24px;
-  margin-bottom: 10px;
+  color: #6b7280;
+}
+
+.header-mini-btn {
+  font-size: 24px;
+}
+
+.search-wrap {
+  background: #f6f6f6;
+  padding: 16px 24px 20px;
+}
+
+.search-input {
+  width: 100%;
+  height: 70px;
+  border-radius: 14px;
+  background: #fff;
+  padding: 0 20px;
+  box-sizing: border-box;
+  font-size: 26px;
+}
+
+.chat-list {
+  padding: 0 0 16px;
+}
+
+.chat-item {
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 24px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.chat-avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #34d399, #10b981);
+  color: #fff;
+  font-size: 36px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chat-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+
+.chat-name {
+  font-size: 30px;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.chat-time {
+  color: #9ca3af;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.chat-preview {
+  color: #64748b;
+  font-size: 24px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-badge {
+  min-width: 40px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 20px;
+  text-align: center;
+}
+
+.chat-empty {
+  padding: 56px 24px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 24px;
+}
+
+.footer-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.footer-btn {
+  font-size: 24px;
+}
+
+.footer-btn.ghost {
+  background: #e2e8f0;
+  color: #334155;
 }

@@ -1,26 +1,146 @@
-.rank-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.rank-left {
+.wx-chat-page {
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  background: #ededed;
 }
 
-.rank-right {
-  color: #2563eb;
+.wx-loading {
+  margin: auto;
+  color: #64748b;
+  font-size: 28px;
+}
+
+.wx-chat-header {
+  background: #f6f6f6;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 18px 24px;
+}
+
+.wx-chat-title {
+  font-size: 32px;
   font-weight: 700;
+  color: #111827;
 }
 
-.challenge-tip {
-  margin-top: 8px;
-  margin-bottom: 8px;
-  color: #7c3aed;
+.wx-chat-meta {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 22px;
+}
+
+.wx-message-list {
+  flex: 1;
+  padding: 20px 18px;
+  box-sizing: border-box;
+}
+
+.wx-message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.wx-message-row.is-me {
+  justify-content: flex-end;
+}
+
+.wx-message-row.is-system {
+  justify-content: center;
+}
+
+.wx-avatar {
+  width: 62px;
+  height: 62px;
+  border-radius: 14px;
+  background: #22c55e;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 24px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.wx-avatar.sys {
+  background: #94a3b8;
+}
+
+.wx-bubble {
+  max-width: 72%;
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 16px 10px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.wx-bubble.me {
+  background: #95ec69;
+}
+
+.wx-bubble.system {
+  max-width: 82%;
+  background: #e2e8f0;
+}
+
+.wx-text {
+  display: block;
+  font-size: 27px;
+  color: #0f172a;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.wx-time {
+  display: block;
+  margin-top: 8px;
+  text-align: right;
+  font-size: 20px;
+  color: #94a3b8;
+}
+
+.wx-quick-actions {
+  background: #f6f6f6;
+  padding: 10px 16px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 10px;
+  overflow: auto;
+}
+
+.quick-btn {
+  flex-shrink: 0;
+  font-size: 22px;
+  background: #fff;
+  color: #334155;
+}
+
+.wx-composer {
+  background: #f6f6f6;
+  padding: 14px 16px 24px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border-top: 1px solid #e2e8f0;
+}
+
+.wx-input {
+  flex: 1;
+  height: 72px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 0 18px;
+  font-size: 26px;
+  box-sizing: border-box;
+}
+
+.wx-send-btn {
+  background: #22c55e;
+  color: #fff;
+  font-size: 24px;
+  height: 72px;
+  line-height: 72px;
+  padding: 0 24px;
 }

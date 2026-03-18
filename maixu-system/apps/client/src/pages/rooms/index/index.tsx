@@ -1,16 +1,28 @@
-import { Button, Text, View } from '@tarojs/components';
+import { Button, Input, Text, View } from '@tarojs/components';
 import Taro, { useDidShow, useUnload } from '@tarojs/taro';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { RoomListItemVO, UserVO } from '@maixu/frontend-sdk';
-import { buildUserLabel, requireLogin } from '../../../services/auth';
+import { buildUserLabel, clearSession, requireLogin } from '../../../services/auth';
 import { getCurrentUser, sdk } from '../../../services/sdk';
 import { showError } from '../../../utils/message';
 import './index.scss';
+
+function formatSlotTime(hour: number) {
+  return `${String(hour).padStart(2, '0')}:00`;
+}
+
+function buildRoomPreview(room: RoomListItemVO) {
+  if (room.currentRankCount > 0) {
+    return `麦序机器人：当前有 ${room.currentRankCount} 人排麦，发送“排麦 手速”即可上麦`;
+  }
+  return '麦序机器人：当前空麦，发送“排麦 任务A 20”开始排麦';
+}
 
 export default function RoomsPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [rooms, setRooms] = useState<RoomListItemVO[]>([]);
   const [loading, setLoading] = useState(false);
+  const [keyword, setKeyword] = useState('');
   const [currentUser, setCurrentUserState] = useState<UserVO | undefined>(() => getCurrentUser<UserVO>());
 
   const loadRooms = async () => {
@@ -31,9 +43,7 @@ export default function RoomsPage() {
       setCurrentUserState(user);
       loadRooms();
       if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(() => {
-        loadRooms();
-      }, 8000);
+      timerRef.current = setInterval(loadRooms, 10000);
     });
   });
 
@@ -41,41 +51,77 @@ export default function RoomsPage() {
     if (timerRef.current) clearInterval(timerRef.current);
   });
 
+  const filteredRooms = useMemo(() => {
+    const sorted = [...rooms].sort((a, b) => b.currentRankCount - a.currentRankCount);
+    const q = keyword.trim().toLowerCase();
+    if (!q) return sorted;
+    return sorted.filter((room) => `${room.name} ${room.description || ''}`.toLowerCase().includes(q));
+  }, [rooms, keyword]);
+
   const handleLogout = () => {
-    Taro.removeStorageSync('maixu_access_token');
-    Taro.removeStorageSync('maixu_refresh_token');
-    Taro.removeStorageSync('maixu_user_info');
+    clearSession();
     Taro.redirectTo({ url: '/pages/auth/login/index' });
   };
 
   return (
-    <View className='container'>
-      <View className='card'>
-        <View className='title'>房间列表</View>
-        <Text className='subtitle'>当前用户：{buildUserLabel(currentUser)}</Text>
-        <View className='btn-row' style={{ marginTop: '16px' }}>
-          <Button onClick={handleLogout}>退出登录</Button>
+    <View className='wechat-page'>
+      <View className='wechat-header'>
+        <View>
+          <View className='wechat-title'>微信</View>
+          <Text className='wechat-subtitle'>{buildUserLabel(currentUser)}</Text>
         </View>
+        <Button className='header-mini-btn' size='mini' onClick={loadRooms} loading={loading}>
+          刷新
+        </Button>
       </View>
 
-      {rooms.map((room) => (
-        <View className='card' key={room.id}>
-          <View className='room-item-title'>{room.name}</View>
-          <View className='room-meta'>{room.description || '暂无描述'}</View>
-          <View className='room-meta'>当前档：{room.currentSlot.slotHour} 点</View>
-          <View className='room-meta'>当前排麦人数：{room.currentRankCount}</View>
-          <View className='btn-row'>
-            <Button className='primary-btn' onClick={() => Taro.navigateTo({ url: `/pages/rooms/detail/index?roomId=${room.id}` })}>
-              进入房间
-            </Button>
-            <Button onClick={() => Taro.navigateTo({ url: `/pages/host/dashboard/index?slotId=${room.currentSlot.id}` })}>
-              主持台
-            </Button>
-          </View>
-        </View>
-      ))}
+      <View className='search-wrap'>
+        <Input
+          className='search-input'
+          value={keyword}
+          placeholder='搜索群聊'
+          onInput={(e) => setKeyword(e.detail.value)}
+        />
+      </View>
 
-      <Button loading={loading} onClick={loadRooms}>刷新</Button>
+      <View className='chat-list'>
+        {filteredRooms.map((room) => (
+          <View
+            className='chat-item'
+            key={room.id}
+            onClick={() => Taro.navigateTo({ url: `/pages/rooms/detail/index?roomId=${room.id}` })}
+          >
+            <View className='chat-avatar'>{room.name.slice(0, 1)}</View>
+            <View className='chat-main'>
+              <View className='chat-top-row'>
+                <Text className='chat-name'>{room.name}</Text>
+                <Text className='chat-time'>{formatSlotTime(room.currentSlot.slotHour)}</Text>
+              </View>
+              <Text className='chat-preview'>{buildRoomPreview(room)}</Text>
+            </View>
+            <View className='chat-badge'>{room.currentRankCount}</View>
+          </View>
+        ))}
+
+        {!filteredRooms.length ? (
+          <View className='chat-empty'>
+            <Text>没找到匹配群聊</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View className='footer-actions'>
+        <Button className='footer-btn ghost' size='mini' onClick={handleLogout}>
+          退出登录
+        </Button>
+        <Button
+          className='footer-btn'
+          size='mini'
+          onClick={() => Taro.navigateTo({ url: '/pages/ops/management/index' })}
+        >
+          运营台
+        </Button>
+      </View>
     </View>
   );
 }
