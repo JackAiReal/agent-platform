@@ -57,6 +57,22 @@
   color: #111827;
 }
 
+.top-dot-btn {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  line-height: 44px;
+  border: none;
+  background: transparent;
+  color: #111827;
+  font-size: 34px;
+  padding: 0;
+}
+
+.top-dot-btn::after {
+  border: none;
+}
+
 .chat-notice {
   margin: 12px 12px 10px;
   height: 68px;

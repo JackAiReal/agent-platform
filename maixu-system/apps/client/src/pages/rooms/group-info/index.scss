@@ -1,0 +1,170 @@
+.group-info-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #efefef;
+}
+
+.group-topbar {
+  height: 92px;
+  background: #f7f7f7;
+  border-bottom: 1px solid #e6e8eb;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  box-sizing: border-box;
+}
+
+.top-back {
+  width: 60px;
+  font-size: 44px;
+  color: #111827;
+  line-height: 1;
+  text-align: center;
+}
+
+.top-title {
+  flex: 1;
+  text-align: center;
+  font-size: 38px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.top-extra {
+  width: 60px;
+  text-align: center;
+  font-size: 30px;
+  color: #9aa3ad;
+}
+
+.group-scroll {
+  flex: 1;
+}
+
+.group-card {
+  background: #fff;
+  margin-top: 12px;
+}
+
+.members-card {
+  margin-top: 0;
+  padding: 18px 14px 8px;
+}
+
+.member-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 18px 12px;
+}
+
+.member-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.member-avatar,
+.member-add {
+  width: 84px;
+  height: 84px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+.member-avatar {
+  background: linear-gradient(150deg, #dbeafe, #e2e8f0);
+  color: #334155;
+}
+
+.member-add {
+  border: 2px dashed #d1d5db;
+  color: #9ca3af;
+  background: #fff;
+  font-size: 44px;
+}
+
+.member-name {
+  margin-top: 8px;
+  font-size: 22px;
+  color: #9ca3af;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more-members {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 34px;
+  padding: 24px 0 18px;
+}
+
+.row {
+  min-height: 92px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f0f2f5;
+  box-sizing: border-box;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row.multiline {
+  align-items: flex-start;
+  padding-top: 16px;
+  padding-bottom: 14px;
+}
+
+.row-label {
+  font-size: 40px;
+  color: #111827;
+}
+
+.row-value-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 12px;
+}
+
+.row-value {
+  font-size: 34px;
+  color: #6b7280;
+  text-align: right;
+  max-width: 430px;
+}
+
+.row-value.multiline-text {
+  text-align: left;
+  white-space: pre-wrap;
+  line-height: 1.35;
+  font-size: 28px;
+  color: #9ca3af;
+}
+
+.row-arrow {
+  font-size: 36px;
+  color: #b8bfc8;
+}
+
+.switch-row switch {
+  transform: scale(0.95);
+  transform-origin: right center;
+}
+
+.exit-card {
+  text-align: center;
+  color: #ef4444;
+  font-size: 40px;
+  line-height: 92px;
+  margin-bottom: 20px;
+}

@@ -1,4 +1,4 @@
-import { Input, ScrollView, Text, View } from '@tarojs/components';
+import { Button, Input, ScrollView, Text, View } from '@tarojs/components';
 import Taro, { getCurrentInstance, useDidShow, useUnload } from '@tarojs/taro';
 import { useMemo, useRef, useState } from 'react';
 import type { LeaveNoticeSnapshotVO, RankResponseVO, RoomDetailVO, UserVO } from '@maixu/frontend-sdk';
@@ -483,9 +483,14 @@ export default function RoomDetailPage() {
         <View className='chat-title-wrap'>
           <Text className='chat-title'>{titleText}</Text>
         </View>
-        <View className='chat-top-actions'>
+        <View
+          className='chat-top-actions'
+          onClick={() => Taro.navigateTo({ url: `/pages/rooms/group-info/index?roomId=${room.id}` })}
+        >
           <Text className='top-action'>◌</Text>
-          <Text className='top-action'>⋯</Text>
+          <Button className='top-dot-btn' size='mini'>
+            ⋯
+          </Button>
         </View>
       </View>
 

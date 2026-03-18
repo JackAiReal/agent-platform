@@ -3,6 +3,7 @@ export default {
     'pages/auth/login/index',
     'pages/rooms/index/index',
     'pages/rooms/detail/index',
+    'pages/rooms/group-info/index',
     'pages/host/dashboard/index',
     'pages/ops/management/index',
   ],
