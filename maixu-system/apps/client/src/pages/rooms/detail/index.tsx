@@ -217,7 +217,7 @@ function calcInputLines(text: string) {
   if (!text) return 1;
   const hardLines = text.split('\n');
   const estimated = hardLines.reduce((total, line) => total + Math.max(1, Math.ceil(line.length / 22)), 0);
-  return Math.min(3, Math.max(1, estimated));
+  return Math.max(1, estimated);
 }
 
 export default function RoomDetailPage() {
@@ -242,6 +242,7 @@ export default function RoomDetailPage() {
   const [scrollIntoView, setScrollIntoView] = useState('');
   const [composer, setComposer] = useState('');
   const [inputLineCount, setInputLineCount] = useState(1);
+  const [rawInputLineCount, setRawInputLineCount] = useState(1);
   const [sending, setSending] = useState(false);
 
   const [historyBadgeCount, setHistoryBadgeCount] = useState(0);
@@ -606,6 +607,7 @@ export default function RoomDetailPage() {
 
     setComposer('');
     setInputLineCount(1);
+    setRawInputLineCount(1);
     setBottomPanel(null);
     updateRecentCommand(text);
 
@@ -657,19 +659,6 @@ export default function RoomDetailPage() {
     }
     markConversationRead();
   };
-
-  const textareaExtraProps = {
-    onKeyDown: (e: {
-      key?: string;
-      shiftKey?: boolean;
-      preventDefault?: () => void;
-    }) => {
-      if (e?.key === 'Enter' && !e?.shiftKey) {
-        e.preventDefault?.();
-        handleSend();
-      }
-    },
-  } as Record<string, unknown>;
 
   if (!room) {
     return (
@@ -748,22 +737,22 @@ export default function RoomDetailPage() {
         <View className='composer-circle' onClick={handleVoiceIcon}>◉</View>
 
         <Textarea
-          {...textareaExtraProps}
-          className={`composer-input ${inputLineCount >= 3 ? 'max-lines' : ''}`}
+          className={`composer-input ${rawInputLineCount > 3 ? 'max-lines' : ''}`}
           value={composer}
           onInput={(e) => {
             const next = e.detail.value;
+            const lineCount = calcInputLines(next);
             setComposer(next);
-            setInputLineCount(calcInputLines(next));
+            setRawInputLineCount(lineCount);
+            setInputLineCount(Math.min(3, lineCount));
           }}
           onLineChange={(e) => {
             const lineCount = Number((e as { detail?: { lineCount?: number } })?.detail?.lineCount || 1);
+            setRawInputLineCount(Math.max(1, lineCount));
             setInputLineCount(Math.min(3, Math.max(1, lineCount)));
           }}
-          onConfirm={() => handleSend()}
           maxlength={500}
           showConfirmBar={false}
-          confirmType='send'
           fixed
           cursorSpacing={20}
           placeholder='发消息'

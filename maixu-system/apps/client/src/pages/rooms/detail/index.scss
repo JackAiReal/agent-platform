@@ -243,11 +243,16 @@
   box-sizing: border-box;
   font-size: 28px;
   line-height: 34px;
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 .composer-input.max-lines {
   overflow-y: auto;
+}
+
+.composer-input::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .send-btn {
