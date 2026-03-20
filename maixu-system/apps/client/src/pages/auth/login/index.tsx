@@ -1,52 +1,98 @@
 import { Button, Input, Text, View } from '@tarojs/components';
 import Taro, { getCurrentInstance, useDidShow } from '@tarojs/taro';
-import { useState } from 'react';
-import { restoreSession } from '../../../services/auth';
+import { useMemo, useState } from 'react';
+import { clearSession, restoreSession } from '../../../services/auth';
 import { sdk, setAccessToken, setCurrentUser, setRefreshToken } from '../../../services/sdk';
+import {
+  getActiveWechatAccountId,
+  getWechatAccountById,
+  loginWechatAccount,
+  registerWechatAccount,
+  syncActiveAccountProfile,
+} from '../../../services/wechat-social';
 import { showError, showSuccess } from '../../../utils/message';
 import './index.scss';
 
-const QUICK_LOGIN_USERS = [
-  {
-    label: '演示主持',
-    nickname: '演示主持',
-    openid: 'seed-host-openid',
-  },
-  {
-    label: '演示用户',
-    nickname: '演示用户',
-    openid: 'seed-guest-openid',
-  },
-  {
-    label: '系统管理员',
-    nickname: '系统管理员',
-    openid: 'seed-admin-openid',
-  },
-] as const;
+type AuthMode = 'login' | 'register';
 
 export default function LoginPage() {
   const redirect = getCurrentInstance().router?.params?.redirect;
+
+  const [mode, setMode] = useState<AuthMode>('login');
+  const [account, setAccount] = useState('');
+  const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const submitLabel = useMemo(() => (mode === 'login' ? '登录' : '注册并登录'), [mode]);
+
   useDidShow(() => {
     restoreSession().then((user) => {
-      if (user) {
+      const active = getActiveWechatAccountId();
+      if (user && active) {
         Taro.redirectTo({ url: redirect || '/pages/rooms/index/index' });
+        return;
+      }
+
+      if (user && !active) {
+        clearSession();
       }
     });
   });
 
-  const doLogin = async (payload: { nickname: string; openid?: string }) => {
+  const backendLogin = async (targetAccount: string) => {
+    const localAccount = getWechatAccountById(targetAccount);
+    if (!localAccount) {
+      throw new Error('账号不存在');
+    }
+
+    const result = await sdk.auth.devLogin({
+      nickname: localAccount.nickname,
+      avatarUrl: localAccount.avatarUrl,
+      openid: localAccount.backendOpenid,
+    });
+
+    setAccessToken(result.accessToken);
+    if (result.refreshToken) {
+      setRefreshToken(result.refreshToken);
+    }
+    setCurrentUser(result.user);
+
+    syncActiveAccountProfile({
+      backendUserId: result.user.id,
+      nickname: result.user.nickname,
+      avatarUrl: result.user.avatarUrl,
+    });
+  };
+
+  const handleSubmit = async () => {
     try {
       setLoading(true);
-      const result = await sdk.auth.devLogin(payload);
-      setAccessToken(result.accessToken);
-      if (result.refreshToken) {
-        setRefreshToken(result.refreshToken);
+
+      const nextAccount = account.trim().toLowerCase();
+      const nextPassword = password.trim();
+
+      if (!nextAccount) {
+        throw new Error('请输入账号');
       }
-      setCurrentUser(result.user);
-      showSuccess('登录成功');
+
+      if (!nextPassword) {
+        throw new Error('请输入密码');
+      }
+
+      if (mode === 'register') {
+        registerWechatAccount({
+          account: nextAccount,
+          password: nextPassword,
+          nickname: nickname.trim() || nextAccount,
+        });
+        loginWechatAccount({ account: nextAccount, password: nextPassword });
+      } else {
+        loginWechatAccount({ account: nextAccount, password: nextPassword });
+      }
+
+      await backendLogin(nextAccount);
+      showSuccess(mode === 'login' ? '登录成功' : '注册成功');
       Taro.redirectTo({ url: redirect || '/pages/rooms/index/index' });
     } catch (error) {
       showError(error);
@@ -55,46 +101,49 @@ export default function LoginPage() {
     }
   };
 
-  const handleLogin = async () => {
-    if (!nickname.trim()) {
-      showError(new Error('请输入昵称'));
-      return;
-    }
-
-    await doLogin({ nickname: nickname.trim() });
-  };
-
   return (
     <View className='container'>
       <View className='card'>
-        <View className='title'>排麦系统登录</View>
-        <Text className='subtitle'>当前先走 dev 登录。数据库联调可直接用下面的种子账号。</Text>
+        <View className='title'>微信账号登录</View>
+        <Text className='subtitle'>支持注册、登录、好友、私聊和群聊联动。</Text>
+
+        <View className='auth-mode-switch'>
+          <View className={`auth-mode-item ${mode === 'login' ? 'active' : ''}`} onClick={() => setMode('login')}>
+            登录
+          </View>
+          <View className={`auth-mode-item ${mode === 'register' ? 'active' : ''}`} onClick={() => setMode('register')}>
+            注册
+          </View>
+        </View>
 
         <Input
           className='login-input'
-          placeholder='输入任意昵称登录（普通用户）'
-          value={nickname}
-          onInput={(e) => setNickname(e.detail.value)}
+          placeholder='账号（字母/数字）'
+          value={account}
+          onInput={(e) => setAccount(e.detail.value)}
         />
 
-        <View className='login-actions'>
-          <Button className='primary-btn' loading={loading} onClick={handleLogin}>
-            使用昵称登录
-          </Button>
-        </View>
+        <Input
+          className='login-input'
+          password
+          placeholder='密码（至少6位）'
+          value={password}
+          onInput={(e) => setPassword(e.detail.value)}
+        />
 
-        <View className='quick-login-title'>快速登录（数据库联调）</View>
-        <View className='quick-login-list'>
-          {QUICK_LOGIN_USERS.map((item) => (
-            <Button
-              key={item.openid}
-              className='quick-login-btn'
-              loading={loading}
-              onClick={() => doLogin({ nickname: item.nickname, openid: item.openid })}
-            >
-              {item.label}
-            </Button>
-          ))}
+        {mode === 'register' ? (
+          <Input
+            className='login-input'
+            placeholder='昵称（可选）'
+            value={nickname}
+            onInput={(e) => setNickname(e.detail.value)}
+          />
+        ) : null}
+
+        <View className='login-actions'>
+          <Button className='primary-btn' loading={loading} onClick={handleSubmit}>
+            {submitLabel}
+          </Button>
         </View>
       </View>
     </View>
