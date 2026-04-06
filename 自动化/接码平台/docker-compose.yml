@@ -1,0 +1,51 @@
+services:
+  opentrashmail:
+    image: hascheksolutions/opentrashmail:1
+    container_name: opentrashmail
+    restart: unless-stopped
+    entrypoint: ["python3", "/var/www/opentrashmail/bootstrap_env.py"]
+    env_file:
+      - .env
+    ports:
+      - "25:25"
+      - "8080:80"
+    volumes:
+      - ./data:/var/www/opentrashmail/data
+      - ./logs:/var/www/opentrashmail/logs
+      - ./.env:/var/www/opentrashmail/runtime.env
+      - ./bootstrap_env.py:/var/www/opentrashmail/bootstrap_env.py:ro
+      - ./config.ini:/var/www/opentrashmail/config.ini
+      - ./overrides/index.php:/var/www/opentrashmail/web/index.php:ro
+      - ./overrides/index.html.php:/var/www/opentrashmail/web/templates/index.html.php:ro
+      - ./overrides/admin.html.php:/var/www/opentrashmail/web/templates/admin.html.php:ro
+      - ./overrides/domain-manager.html.php:/var/www/opentrashmail/web/templates/domain-manager.html.php:ro
+      - ./overrides/account-list.html.php:/var/www/opentrashmail/web/templates/account-list.html.php:ro
+      - ./overrides/intro.html:/var/www/opentrashmail/web/templates/intro.html:ro
+
+  mail-bridge:
+    image: python:3.11-slim
+    container_name: opentrashmail-mail-bridge
+    restart: unless-stopped
+    working_dir: /app
+    command:
+      - sh
+      - -lc
+      - pip install --no-cache-dir docker >/tmp/mail-bridge-pip.log 2>&1 && python /app/mail_bridge_service.py
+    environment:
+      MAIL_BRIDGE_HOST: 0.0.0.0
+      MAIL_BRIDGE_PORT: 18762
+      MAIL_BRIDGE_APP_ROOT: /opt/opentrashmail
+      MAIL_BRIDGE_DATA_ROOT: /opt/opentrashmail/data
+      MAIL_BRIDGE_ENV_PATH: /opt/opentrashmail/.env
+      MAIL_BRIDGE_TARGET_CONTAINER: opentrashmail
+      MAIL_BRIDGE_PUBLIC_BASE: ${MAIL_BRIDGE_PUBLIC_BASE}
+      MAIL_BRIDGE_TOKEN: ${MAIL_BRIDGE_TOKEN}
+    depends_on:
+      - opentrashmail
+    ports:
+      - "18762:18762"
+    volumes:
+      - ./mail-bridge:/app:ro
+      - ./data:/opt/opentrashmail/data
+      - ./.env:/opt/opentrashmail/.env
+      - /var/run/docker.sock:/var/run/docker.sock

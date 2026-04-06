@@ -1,0 +1,203 @@
+.dashboard-layout {
+  min-height: 100vh;
+}
+
+.dashboard-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: auto;
+  padding: 18px 24px;
+  line-height: normal;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(5, 5, 5, 0.06);
+}
+
+.dashboard-content {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.dashboard-top-panels-row {
+  align-items: stretch;
+}
+
+.dashboard-top-panels-row > .ant-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-inline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.metric-row {
+  margin-top: 8px;
+}
+
+.top-section-col {
+  display: flex;
+}
+
+.top-panel-stack {
+  width: 100%;
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.monitor-card {
+  height: 100%;
+}
+
+.monitor-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.monitor-stack {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.status-summary-card .ant-card-body {
+  padding: 16px;
+}
+
+.log-panel {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid rgba(5, 5, 5, 0.06);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.015), rgba(22, 119, 255, 0.03));
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.log-item {
+  padding-inline: 16px !important;
+}
+
+.log-row-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.log-meta {
+  min-width: 0;
+}
+
+.log-time {
+  min-width: 84px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.log-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.strategy-card {
+  height: 100%;
+}
+
+.strategy-card .ant-card-body {
+  height: 100%;
+}
+
+.domain-registry-panel {
+  padding: 12px;
+  border: 1px solid rgba(5, 5, 5, 0.06);
+  border-radius: 12px;
+  background: rgba(22, 119, 255, 0.03);
+}
+
+.domain-check-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.output-file-list {
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid rgba(5, 5, 5, 0.06);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
+.setup-wizard-steps {
+  padding: 8px 4px 0;
+  border: 1px solid rgba(5, 5, 5, 0.06);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(22, 119, 255, 0.02), rgba(22, 119, 255, 0.01));
+}
+
+.setup-step-card {
+  border-radius: 12px;
+}
+
+.setup-step-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+html.dark .dashboard-header,
+[data-theme="dark"] .dashboard-header {
+  background: rgba(15, 23, 42, 0.88);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 991px) {
+  .dashboard-header {
+    padding: 16px;
+  }
+
+  .dashboard-content {
+    padding: 16px;
+  }
+
+  .top-section-col {
+    display: block;
+  }
+
+  .top-panel-stack {
+    display: flex;
+    height: auto !important;
+  }
+
+  .dashboard-top-panels-row > .ant-col {
+    display: block;
+  }
+
+  .log-panel {
+    height: 320px;
+    max-height: 320px;
+    min-height: 320px;
+    flex: none;
+  }
+
+  .output-file-list {
+    max-height: 260px;
+  }
+
+  .log-row-grid {
+    grid-template-columns: 1fr;
+  }
+}

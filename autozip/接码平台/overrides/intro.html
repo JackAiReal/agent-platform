@@ -1,0 +1,8 @@
+<section class="intro-card">
+  <h1>欢迎使用 Mail Workspace</h1>
+  <p>这里是面向验证码收取与临时邮箱查看的自部署入口。左侧可打开邮箱，右侧会展示当前邮箱的验证码、邮件列表和邮件详情。管理员模式会显示全部账号，普通模式只保留自己生成过的邮箱。现在你也可以在左侧先选择域名后缀，再按所选域名随机生成邮箱。</p>
+  <div class="intro-actions">
+    <button class="btn-primary" type="button" onclick="WorkspaceUI.generateRandom()"><i class="fas fa-random"></i>立即生成随机邮箱</button>
+    <button class="btn-secondary" type="button" onclick="document.getElementById('workspace-email-input').focus()"><i class="fas fa-keyboard"></i>输入已有邮箱</button>
+  </div>
+</section>
